@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -65,10 +66,7 @@ class _Header extends StatelessWidget {
             children: [
               Text('Pixel Maps',
                   style: AppTextStyles.appTitle.copyWith(fontSize: 20)),
-              Text(
-                'every memory, 8 × 8',
-                style: AppTextStyles.muted,
-              ),
+              Text('every memory, 8 × 8', style: AppTextStyles.muted),
             ],
           ),
         ],
@@ -96,9 +94,24 @@ class _PixelmapGrid extends StatelessWidget {
       itemBuilder: (context, index) {
         return _PixelmapTile(
           memory: memories[index],
-          onTap: () => context.push('/memory/${memories[index].id}'),
+          onTap: () => _showPixelReveal(context, memories[index]),
         );
       },
+    );
+  }
+
+  void _showPixelReveal(BuildContext context, Memory memory) {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierDismissible: true,
+        barrierColor: Colors.black,
+        pageBuilder: (context, animation, _) => FadeTransition(
+          opacity: animation,
+          child: _PixelRevealPage(memory: memory),
+        ),
+        transitionDuration: const Duration(milliseconds: 300),
+      ),
     );
   }
 }
@@ -125,10 +138,7 @@ class _PixelmapTile extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            PixelMapWidget(
-              pixels: memory.pixelMap!,
-              size: 64,
-            ),
+            PixelMapWidget(pixels: memory.pixelMap!, size: 64),
             const SizedBox(height: 6),
             Text(
               dateStr.toUpperCase(),
@@ -140,9 +150,130 @@ class _PixelmapTile extends StatelessWidget {
             ),
             Text(
               year,
-              style: AppTextStyles.muted.copyWith(
-                fontSize: 8,
-                letterSpacing: 0.8,
+              style: AppTextStyles.muted.copyWith(fontSize: 8, letterSpacing: 0.8),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Pixel → Photo reveal overlay ────────────────────────────────────────────
+
+class _PixelRevealPage extends StatefulWidget {
+  const _PixelRevealPage({required this.memory});
+
+  final Memory memory;
+
+  @override
+  State<_PixelRevealPage> createState() => _PixelRevealPageState();
+}
+
+class _PixelRevealPageState extends State<_PixelRevealPage>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+    _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
+    // Brief pause so user sees the pixel art first
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) _ctrl.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
+    return GestureDetector(
+      onTap: () => Navigator.of(context).pop(),
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Real photo (revealed as pixel art fades)
+            Image.file(
+              File(widget.memory.photoPath),
+              fit: BoxFit.cover,
+              width: double.infinity,
+              height: double.infinity,
+            ),
+            // Pixel art overlay fading out
+            AnimatedBuilder(
+              animation: _anim,
+              builder: (context, _) => Opacity(
+                opacity: (1.0 - _anim.value).clamp(0.0, 1.0),
+                child: FittedBox(
+                  fit: BoxFit.cover,
+                  child: PixelMapWidget(
+                    pixels: widget.memory.pixelMap!,
+                    size: size.shortestSide,
+                    pixelGap: 2,
+                  ),
+                ),
+              ),
+            ),
+            // Top bar
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      GestureDetector(
+                        onTap: () => Navigator.of(context).pop(),
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.close,
+                              color: Colors.white, size: 18),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          context.push('/memory/${widget.memory.id}');
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.2)),
+                          ),
+                          child: Text('View Memory',
+                              style: AppTextStyles.body
+                                  .copyWith(fontSize: 13)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ],
@@ -163,7 +294,6 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // 4x4 placeholder pixel grid
             SizedBox(
               width: 64,
               height: 64,
@@ -172,14 +302,15 @@ class _EmptyState extends StatelessWidget {
                 mainAxisSpacing: 4,
                 crossAxisSpacing: 4,
                 physics: const NeverScrollableScrollPhysics(),
-                children: List.generate(16, (i) {
-                  return Container(
+                children: List.generate(
+                  16,
+                  (i) => Container(
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.07),
                       borderRadius: BorderRadius.circular(3),
                     ),
-                  );
-                }),
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 24),

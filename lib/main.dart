@@ -5,6 +5,9 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'data/repositories/memory_repository.dart';
+import 'data/repositories/settings_repository.dart';
+import 'data/repositories/bucket_list_repository.dart';
+import 'data/repositories/places_repository.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +28,9 @@ void main() async {
   // Hive init
   await Hive.initFlutter();
   await MemoryRepository.init();
+  await SettingsRepository.init();
+  await BucketListRepository.init();
+  await PlacesRepository.init();
 
   runApp(const ProviderScope(child: HarmonyApp()));
 }

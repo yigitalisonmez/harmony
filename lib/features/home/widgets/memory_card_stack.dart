@@ -1,8 +1,8 @@
 import 'dart:io';
-import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:card_stack_swiper/card_stack_swiper.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../data/models/memory.dart';
@@ -19,83 +19,133 @@ class MemoryCardStack extends StatefulWidget {
     required this.memories,
     required this.onCardTap,
     required this.onFavourite,
+    required this.onDelete,
     this.controller,
   });
 
   final List<Memory> memories;
   final ValueChanged<Memory> onCardTap;
   final ValueChanged<Memory> onFavourite;
+  final ValueChanged<Memory> onDelete;
   final MemoryCardController? controller;
 
   @override
   State<MemoryCardStack> createState() => _MemoryCardStackState();
 }
 
-class _MemoryCardStackState extends State<MemoryCardStack>
-    with SingleTickerProviderStateMixin {
+class _MemoryCardStackState extends State<MemoryCardStack> {
   int _currentIndex = 0;
-  late AnimationController _flipController;
-  late Animation<double> _flipAnimation;
+  bool _showHeart = false;
+  late final CardStackSwiperController _swiperCtrl;
 
   @override
   void initState() {
     super.initState();
-    _flipController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    );
-    _flipAnimation = CurvedAnimation(
-      parent: _flipController,
-      curve: Curves.easeInOutCubic,
-    );
-    widget.controller?.register(
-      onSkip: _flipToNext,
-      onFavourite: _favouriteAndFlip,
-    );
+    _swiperCtrl = CardStackSwiperController();
+    _register();
   }
 
   @override
-  void didUpdateWidget(MemoryCardStack oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.controller != oldWidget.controller) {
-      widget.controller?.register(
-        onSkip: _flipToNext,
-        onFavourite: _favouriteAndFlip,
-      );
-    }
+  void didUpdateWidget(MemoryCardStack old) {
+    super.didUpdateWidget(old);
+    if (widget.controller != old.controller) _register();
+  }
+
+  void _register() {
+    widget.controller?.register(
+      onSkip: () => _swiperCtrl.swipe(CardStackSwiperDirection.left),
+      onFavourite: () {
+        final idx = _currentIndex.clamp(0, widget.memories.length - 1);
+        widget.onFavourite(widget.memories[idx]);
+        _swiperCtrl.swipe(CardStackSwiperDirection.right);
+      },
+    );
   }
 
   @override
   void dispose() {
-    _flipController.dispose();
+    _swiperCtrl.dispose();
     super.dispose();
   }
 
-  Memory get _currentMemory => widget.memories[_currentIndex];
-  Memory get _nextMemory =>
-      widget.memories[(_currentIndex + 1) % widget.memories.length];
-
-  void _flipToNext() {
-    if (_flipController.isAnimating) return;
-    HapticFeedback.mediumImpact();
-    _flipController.forward(from: 0).then((_) {
-      setState(() {
-        _currentIndex = (_currentIndex + 1) % widget.memories.length;
-      });
-      _flipController.reset();
-    });
+  // ── Long press options ────────────────────────────────────────────────────
+  void _showOptions(BuildContext context, Memory memory) {
+    HapticFeedback.heavyImpact();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF111111),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 24),
+            GestureDetector(
+              onTap: () {
+                Navigator.pop(context);
+                widget.onDelete(memory);
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.red.withValues(alpha: 0.25)),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.delete_outline_rounded,
+                        color: Colors.redAccent, size: 20),
+                    SizedBox(width: 10),
+                    Text('Delete memory',
+                        style: TextStyle(
+                            color: Colors.redAccent,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Text('Cancel',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white54, fontSize: 15)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
-  void _favouriteAndFlip() {
-    if (_flipController.isAnimating) return;
-    widget.onFavourite(_currentMemory);
-    _flipToNext();
-  }
-
+  // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final memories = widget.memories;
     if (memories.isEmpty) return const SizedBox.shrink();
+
+    final safeIndex = _currentIndex.clamp(0, memories.length - 1);
 
     return Column(
       children: [
@@ -105,85 +155,95 @@ class _MemoryCardStackState extends State<MemoryCardStack>
             child: Stack(
               alignment: Alignment.center,
               children: [
-                // Back card — always the next memory, peeks behind
-                _buildBackCard(_nextMemory),
-                // Front card — 3D flip animation
-                _buildFlipCard(),
+                // ── Card swiper ──────────────────────────────────────────
+                CardStackSwiper(
+                  controller: _swiperCtrl,
+                  cardsCount: memories.length,
+
+                  onSwipe: (previousIndex, currentIndex, direction) {
+                    if (direction == CardStackSwiperDirection.right) {
+                      widget.onFavourite(memories[previousIndex]);
+                    }
+                    HapticFeedback.mediumImpact();
+                    setState(() {
+                      _currentIndex = currentIndex ?? 0;
+                    });
+                    return true;
+                  },
+                  cardBuilder: (context, index, percentX, percentY) {
+                    final memory = memories[index];
+                    return RepaintBoundary(
+                      child: GestureDetector(
+                        onTap: () => widget.onCardTap(memory),
+                        onDoubleTap: () {
+                          HapticFeedback.mediumImpact();
+                          widget.onFavourite(memory);
+                          setState(() => _showHeart = true);
+                        },
+                        onLongPress: () => _showOptions(context, memory),
+                        child: _CardContent(memory: memory),
+                      ),
+                    );
+                  },
+                ),
+
+                // ── Heart burst (çift tıkta) ─────────────────────────────
+                if (_showHeart)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: Center(
+                        child: _HeartBurst(
+                          onComplete: () {
+                            if (mounted) setState(() => _showHeart = false);
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
         ),
-        AnimatedBuilder(
-          animation: _flipAnimation,
-          builder: (context, _) {
-            // Cross-fade note section during flip
-            final v = _flipAnimation.value;
-            final showNext = v >= 0.5;
-            return AnimatedSwitcher(
-              duration: const Duration(milliseconds: 180),
-              child: _buildNoteSection(
-                showNext ? _nextMemory : _currentMemory,
-                key: ValueKey(showNext ? 'next' : 'current'),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 110),
+
+        // ── Note + hint ──────────────────────────────────────────────────
+        _buildNoteSection(memories[safeIndex]),
+        const SizedBox(height: 12),
+        _buildHint(),
+        const SizedBox(height: 28),
       ],
     );
   }
 
-  Widget _buildBackCard(Memory memory) {
-    return AnimatedBuilder(
-      animation: _flipAnimation,
-      builder: (context, _) {
-        // As flip progresses, back card scales up slightly toward center
-        final t = _flipAnimation.value;
-        final scale = 0.96 + t * 0.04;
-        final rotation = -0.035 + t * 0.035;
-        return Transform(
-          alignment: Alignment.center,
-          transform: Matrix4.identity()
-            ..rotateZ(rotation)
-            ..scale(scale),
-          child: _CardContent(memory: memory, opacity: 0.6 + t * 0.4),
-        );
-      },
+  Widget _buildHint() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.arrow_back_ios_rounded,
+            size: 9, color: Colors.white.withValues(alpha: 0.18)),
+        const SizedBox(width: 4),
+        Text('skip',
+            style: TextStyle(
+                fontSize: 10,
+                color: Colors.white.withValues(alpha: 0.18),
+                letterSpacing: 0.8)),
+        const SizedBox(width: 20),
+        Icon(Icons.circle,
+            size: 4, color: Colors.white.withValues(alpha: 0.12)),
+        const SizedBox(width: 20),
+        Text('favourite',
+            style: TextStyle(
+                fontSize: 10,
+                color: AppColors.primary.withValues(alpha: 0.45),
+                letterSpacing: 0.8)),
+        const SizedBox(width: 4),
+        Icon(Icons.arrow_forward_ios_rounded,
+            size: 9, color: AppColors.primary.withValues(alpha: 0.45)),
+      ],
     );
   }
 
-  Widget _buildFlipCard() {
-    return AnimatedBuilder(
-      animation: _flipAnimation,
-      builder: (context, _) {
-        final v = _flipAnimation.value;
-        final isFirstHalf = v < 0.5;
-
-        // First half: current card rotates away (0 → π/2)
-        // Second half: next card rotates in  (-π/2 → 0)
-        final angle = isFirstHalf
-            ? v * math.pi          // 0 → π/2
-            : (v - 1.0) * math.pi; // -π/2 → 0
-
-        final memory = isFirstHalf ? _currentMemory : _nextMemory;
-
-        return GestureDetector(
-          onTap: _flipToNext,
-          child: Transform(
-            alignment: Alignment.center,
-            transform: Matrix4.identity()
-              ..setEntry(3, 2, 0.0015) // perspective
-              ..rotateY(angle),
-            child: _CardContent(memory: memory),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildNoteSection(Memory memory, {Key? key}) {
+  Widget _buildNoteSection(Memory memory) {
     return Padding(
-      key: key,
       padding: const EdgeInsets.fromLTRB(28, 16, 28, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -193,8 +253,7 @@ class _MemoryCardStackState extends State<MemoryCardStack>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: 24,
-                  height: 24,
+                  width: 24, height: 24,
                   margin: const EdgeInsets.only(top: 4),
                   decoration: BoxDecoration(
                     color: AppColors.primary,
@@ -204,10 +263,8 @@ class _MemoryCardStackState extends State<MemoryCardStack>
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    '"${memory.note!}"',
-                    style: AppTextStyles.noteText,
-                  ),
+                  child: Text('"${memory.note!}"',
+                      style: AppTextStyles.noteText),
                 ),
               ],
             ),
@@ -230,65 +287,83 @@ class _MemoryCardStackState extends State<MemoryCardStack>
   }
 }
 
+// ── Card content ──────────────────────────────────────────────────────────────
 class _CardContent extends StatelessWidget {
-  const _CardContent({required this.memory, this.opacity = 1.0});
-
+  const _CardContent({required this.memory});
   final Memory memory;
-  final double opacity;
 
   @override
   Widget build(BuildContext context) {
-    final dateStr = DateFormat('MMM dd, yyyy').format(memory.date).toUpperCase();
-
-    return Opacity(
-      opacity: opacity,
-      child: AspectRatio(
-        aspectRatio: 3.5 / 4.5,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(40),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              _MemoryPhoto(photoPath: memory.photoPath),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withValues(alpha: 0.3),
-                    ],
-                    stops: const [0.5, 1.0],
-                  ),
+    final dateStr =
+        DateFormat('MMM dd, yyyy').format(memory.date).toUpperCase();
+    return AspectRatio(
+      aspectRatio: 3.5 / 4.5,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(40),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _MemoryPhoto(photoPath: memory.photoPath),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.3),
+                  ],
+                  stops: const [0.5, 1.0],
                 ),
               ),
+            ),
+            Positioned(
+              top: 20, left: 20,
+              child: FrostedBadge(
+                icon: Icons.calendar_today_outlined,
+                label: dateStr,
+              ),
+            ),
+            if (memory.isFavourite)
               Positioned(
-                top: 20,
-                left: 20,
-                child: FrostedBadge(
-                  icon: Icons.calendar_today_outlined,
-                  label: dateStr,
-                ),
-              ),
-              if (memory.location != null && memory.location!.isNotEmpty)
-                Positioned(
-                  bottom: 20,
-                  left: 20,
-                  child: FrostedBadge(
-                    icon: Icons.location_on_outlined,
-                    label: memory.location!,
+                top: 20, right: 20,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(50),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.25),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: AppColors.primary.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.favorite_rounded,
+                        color: AppColors.primary,
+                        size: 16,
+                      ),
+                    ),
                   ),
                 ),
-              if (memory.pixelMap != null &&
-                  memory.pixelMap!.length == kPixelMapTotal)
-                Positioned(
-                  bottom: 16,
-                  right: 16,
-                  child: _PixelMapBadge(pixels: memory.pixelMap!),
+              ),
+            if (memory.location != null && memory.location!.isNotEmpty)
+              Positioned(
+                bottom: 20, left: 20,
+                child: FrostedBadge(
+                  icon: Icons.location_on_outlined,
+                  label: memory.location!,
                 ),
-            ],
-          ),
+              ),
+            if (memory.pixelMap != null &&
+                memory.pixelMap!.length == kPixelMapTotal)
+              Positioned(
+                bottom: 16, right: 16,
+                child: _PixelMapBadge(pixels: memory.pixelMap!),
+              ),
+          ],
         ),
       ),
     );
@@ -297,7 +372,6 @@ class _CardContent extends StatelessWidget {
 
 class _PixelMapBadge extends StatelessWidget {
   const _PixelMapBadge({required this.pixels});
-
   final List<int> pixels;
 
   @override
@@ -305,7 +379,7 @@ class _PixelMapBadge extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(10),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
         child: Container(
           padding: const EdgeInsets.all(5),
           decoration: BoxDecoration(
@@ -320,16 +394,38 @@ class _PixelMapBadge extends StatelessWidget {
   }
 }
 
-class _MemoryPhoto extends StatelessWidget {
+class _MemoryPhoto extends StatefulWidget {
   const _MemoryPhoto({required this.photoPath});
-
   final String photoPath;
 
   @override
+  State<_MemoryPhoto> createState() => _MemoryPhotoState();
+}
+
+class _MemoryPhotoState extends State<_MemoryPhoto> {
+  late bool _exists;
+  late File _file;
+
+  @override
+  void initState() {
+    super.initState();
+    _file = File(widget.photoPath);
+    _exists = _file.existsSync();
+  }
+
+  @override
+  void didUpdateWidget(_MemoryPhoto old) {
+    super.didUpdateWidget(old);
+    if (old.photoPath != widget.photoPath) {
+      _file = File(widget.photoPath);
+      _exists = _file.existsSync();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final file = File(photoPath);
-    return file.existsSync()
-        ? Image.file(file, fit: BoxFit.cover)
+    return _exists
+        ? Image.file(_file, fit: BoxFit.cover, cacheWidth: 800)
         : Container(
             color: const Color(0xFF1A1A1A),
             child: const Center(
@@ -337,5 +433,77 @@ class _MemoryPhoto extends StatelessWidget {
                   color: Colors.white24, size: 48),
             ),
           );
+  }
+}
+
+// ── Heart burst animation ─────────────────────────────────────────────────────
+class _HeartBurst extends StatefulWidget {
+  const _HeartBurst({required this.onComplete});
+  final VoidCallback onComplete;
+
+  @override
+  State<_HeartBurst> createState() => _HeartBurstState();
+}
+
+class _HeartBurstState extends State<_HeartBurst>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+  late final Animation<double> _opacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    );
+
+    _scale = TweenSequence([
+      TweenSequenceItem(tween: Tween(begin: 0.4, end: 1.25)
+          .chain(CurveTween(curve: Curves.easeOut)), weight: 55),
+      TweenSequenceItem(tween: Tween(begin: 1.25, end: 1.0)
+          .chain(CurveTween(curve: Curves.easeIn)), weight: 20),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.4)
+          .chain(CurveTween(curve: Curves.easeOut)), weight: 25),
+    ]).animate(_ctrl);
+
+    _opacity = TweenSequence([
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 65),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0)
+          .chain(CurveTween(curve: Curves.easeIn)), weight: 35),
+    ]).animate(_ctrl);
+
+    _ctrl.forward().then((_) => widget.onComplete());
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (_, __) => Opacity(
+        opacity: _opacity.value,
+        child: Transform.scale(
+          scale: _scale.value,
+          child: Icon(
+            Icons.favorite_rounded,
+            size: 100,
+            color: AppColors.primary,
+            shadows: [
+              Shadow(
+                color: AppColors.primary.withValues(alpha: 0.5),
+                blurRadius: 24,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
