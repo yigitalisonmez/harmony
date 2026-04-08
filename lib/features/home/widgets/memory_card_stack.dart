@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:ui';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:card_stack_swiper/card_stack_swiper.dart';
@@ -303,7 +304,7 @@ class _CardContent extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            _MemoryPhoto(photoPath: memory.photoPath),
+            _MemoryPhoto(photoPath: memory.photoPath, photoUrl: memory.photoUrl),
             DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -395,22 +396,23 @@ class _PixelMapBadge extends StatelessWidget {
 }
 
 class _MemoryPhoto extends StatefulWidget {
-  const _MemoryPhoto({required this.photoPath});
+  const _MemoryPhoto({required this.photoPath, required this.photoUrl});
   final String photoPath;
+  final String? photoUrl;
 
   @override
   State<_MemoryPhoto> createState() => _MemoryPhotoState();
 }
 
 class _MemoryPhotoState extends State<_MemoryPhoto> {
-  late bool _exists;
+  late bool _localExists;
   late File _file;
 
   @override
   void initState() {
     super.initState();
     _file = File(widget.photoPath);
-    _exists = _file.existsSync();
+    _localExists = widget.photoPath.isNotEmpty && _file.existsSync();
   }
 
   @override
@@ -418,22 +420,35 @@ class _MemoryPhotoState extends State<_MemoryPhoto> {
     super.didUpdateWidget(old);
     if (old.photoPath != widget.photoPath) {
       _file = File(widget.photoPath);
-      _exists = _file.existsSync();
+      _localExists = widget.photoPath.isNotEmpty && _file.existsSync();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return _exists
-        ? Image.file(_file, fit: BoxFit.cover, cacheWidth: 800)
-        : Container(
-            color: const Color(0xFF1A1A1A),
-            child: const Center(
-              child: Icon(Icons.image_not_supported_outlined,
-                  color: Colors.white24, size: 48),
-            ),
-          );
+    // Local file takes priority (just uploaded), then remote URL
+    if (_localExists) {
+      return Image.file(_file, fit: BoxFit.cover, cacheWidth: 800);
+    }
+    if (widget.photoUrl != null) {
+      return CachedNetworkImage(
+        imageUrl: widget.photoUrl!,
+        fit: BoxFit.cover,
+        memCacheWidth: 800,
+        placeholder: (_, __) => Container(color: const Color(0xFF1A1A1A)),
+        errorWidget: (_, __, ___) => _placeholder(),
+      );
+    }
+    return _placeholder();
   }
+
+  Widget _placeholder() => Container(
+        color: const Color(0xFF1A1A1A),
+        child: const Center(
+          child: Icon(Icons.image_not_supported_outlined,
+              color: Colors.white24, size: 48),
+        ),
+      );
 }
 
 // ── Heart burst animation ─────────────────────────────────────────────────────

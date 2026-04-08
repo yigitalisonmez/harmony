@@ -1,8 +1,8 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import '../../shared/widgets/memory_image.dart' show MemoryPhotoView;
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../data/models/memory.dart';
@@ -21,7 +21,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final memories = ref.watch(memoriesProvider);
+    final memories = ref.watch(memoriesProvider).valueOrNull ?? [];
 
     final memoryMap = <DateTime, List<Memory>>{};
     for (final m in memories) {
@@ -260,9 +260,9 @@ class _MemoryListTile extends StatelessWidget {
               child: SizedBox(
                 width: 80,
                 height: 80,
-                child: Image.file(
-                  File(memory.photoPath),
-                  fit: BoxFit.cover,
+                child: MemoryPhotoView(
+                  photoPath: memory.photoPath,
+                  photoUrl: memory.photoUrl,
                   cacheWidth: 160,
                 ),
               ),
@@ -344,7 +344,7 @@ class _DayCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final has = memories.isNotEmpty;
-    final photo = has ? File(memories.first.photoPath) : null;
+    final firstMemory = has ? memories.first : null;
 
     return GestureDetector(
       onTap: onTap,
@@ -372,12 +372,12 @@ class _DayCell extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               // Photo thumbnail background
-              if (photo != null)
+              if (firstMemory != null)
                 Opacity(
                   opacity: isSelected ? 0.5 : 0.35,
-                  child: Image.file(
-                    photo,
-                    fit: BoxFit.cover,
+                  child: MemoryPhotoView(
+                    photoPath: firstMemory.photoPath,
+                    photoUrl: firstMemory.photoUrl,
                     cacheWidth: 80,
                   ),
                 ),

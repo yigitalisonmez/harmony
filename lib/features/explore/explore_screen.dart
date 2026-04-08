@@ -13,7 +13,7 @@ class ExploreScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final memories   = ref.watch(memoriesProvider);
+    final memories   = ref.watch(memoriesProvider).valueOrNull ?? [];
     final settings   = ref.watch(settingsProvider);
     final pixelCount  = memories.where((m) => m.pixelMap != null).length;
     final favCount    = memories.where((m) => m.isFavourite).length;

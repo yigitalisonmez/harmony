@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,7 +21,7 @@ class MemoryDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final memories = ref.watch(memoriesProvider);
+    final memories = ref.watch(memoriesProvider).valueOrNull ?? [];
     final memory = memories.where((m) => m.id == memoryId).firstOrNull;
 
     if (memory == null) {
@@ -60,7 +61,7 @@ class _DetailContentState extends ConsumerState<_DetailContent> {
   Future<void> _toggleFavourite() async {
     HapticFeedback.mediumImpact();
     setState(() => _isFavourite = !_isFavourite);
-    await ref.read(memoriesProvider.notifier).toggleFavourite(widget.memory.id);
+    await ref.read(memoriesNotifierProvider).toggleFavourite(widget.memory.id);
   }
 
   void _confirmDelete(BuildContext context) {
@@ -118,7 +119,7 @@ class _DetailContentState extends ConsumerState<_DetailContent> {
                       onTap: () {
                         Navigator.pop(context);
                         ref
-                            .read(memoriesProvider.notifier)
+                            .read(memoriesNotifierProvider)
                             .delete(widget.memory.id);
                         context.go('/');
                       },
@@ -167,7 +168,7 @@ class _DetailContentState extends ConsumerState<_DetailContent> {
             children: [
               AspectRatio(
                 aspectRatio: 1,
-                child: _buildPhoto(memory.photoPath),
+                child: _buildPhoto(memory),
               ),
               // Gradient overlay at bottom of photo
               Positioned(
@@ -331,17 +332,38 @@ class _DetailContentState extends ConsumerState<_DetailContent> {
     );
   }
 
-  Widget _buildPhoto(String path) {
-    final file = File(path);
-    return file.existsSync()
-        ? Image.file(file, fit: BoxFit.cover)
-        : Container(
-            color: const Color(0xFF1A1A1A),
-            child: const Center(
-              child: Icon(Icons.image_not_supported_outlined,
-                  color: Colors.white24, size: 48),
-            ),
-          );
+  Widget _buildPhoto(Memory memory) {
+    // Local file — own device, shown immediately
+    if (memory.photoPath.isNotEmpty) {
+      final file = File(memory.photoPath);
+      if (file.existsSync()) {
+        return Image.file(file, fit: BoxFit.cover);
+      }
+    }
+
+    // Remote — use cache, instant on repeat visits
+    if (memory.photoUrl != null && memory.photoUrl!.isNotEmpty) {
+      return CachedNetworkImage(
+        imageUrl: memory.photoUrl!,
+        fit: BoxFit.cover,
+        placeholder: (_, __) => Container(color: const Color(0xFF1A1A1A)),
+        errorWidget: (_, __, ___) => Container(
+          color: const Color(0xFF1A1A1A),
+          child: const Center(
+            child: Icon(Icons.image_not_supported_outlined,
+                color: Colors.white24, size: 48),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      color: const Color(0xFF1A1A1A),
+      child: const Center(
+        child: Icon(Icons.image_not_supported_outlined,
+            color: Colors.white24, size: 48),
+      ),
+    );
   }
 }
 

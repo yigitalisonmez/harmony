@@ -1,88 +1,134 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
-import '../home/widgets/heart_line_logo.dart';
+import '../../data/repositories/memory_provider.dart';
 
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
+class _SplashScreenState extends ConsumerState<SplashScreen>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _fadeController;
+  late final AnimationController _ctrl;
+  late final Animation<double> _logoScale;
+  late final Animation<double> _logoFade;
   late final Animation<double> _textFade;
+  bool _navigated = false;
 
   @override
   void initState() {
     super.initState();
 
-    _fadeController = AnimationController(
+    _ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 2200),
     );
 
-    _textFade = CurvedAnimation(
-      parent: _fadeController,
-      curve: Curves.easeIn,
+    _logoScale = Tween<double>(begin: 0.6, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _ctrl,
+        curve: const Interval(0.0, 0.5, curve: Curves.easeOutBack),
+      ),
     );
 
-    // Çizim bittikten sonra yazı fade-in, ardından home'a geç
-    Future.delayed(const Duration(milliseconds: 2000), () {
-      if (mounted) _fadeController.forward();
-    });
+    _logoFade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _ctrl,
+        curve: const Interval(0.0, 0.4, curve: Curves.easeIn),
+      ),
+    );
 
-    Future.delayed(const Duration(milliseconds: 3200), () {
-      if (mounted) context.go('/');
+    _textFade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _ctrl,
+        curve: const Interval(0.6, 1.0, curve: Curves.easeIn),
+      ),
+    );
+
+    _ctrl.forward();
+
+    Future.delayed(const Duration(milliseconds: 3000), () {
+      if (mounted && !_navigated) {
+        _navigated = true;
+        context.go('/');
+      }
     });
   }
 
   @override
   void dispose() {
-    _fadeController.dispose();
+    _ctrl.dispose();
     super.dispose();
+  }
+
+  void _precachePhotos(List memories) {
+    for (final m in memories.take(10)) {
+      final url = m.photoUrl as String?;
+      if (url != null && url.isNotEmpty) {
+        precacheImage(CachedNetworkImageProvider(url), context);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Watching memoriesProvider here starts the Firestore subscription early.
+    // By the time HomeScreen mounts, data is already in Riverpod's cache.
+    final memoriesAsync = ref.watch(memoriesProvider);
+    memoriesAsync.whenData(_precachePhotos);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Animasyonlu logo
-            const HeartLineLogo(
-              size: 120,
-              color: AppColors.primary,
-              strokeWidth: 5.0,
-              duration: Duration(milliseconds: 1800),
-            ),
-            const SizedBox(height: 32),
-            // Yazı — logo bittikten sonra fade in
-            FadeTransition(
-              opacity: _textFade,
-              child: Column(
-                children: [
-                  Text(
-                    'harmony',
-                    style: AppTextStyles.appTitle.copyWith(fontSize: 32),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'every moment, together',
-                    style: AppTextStyles.muted.copyWith(
-                      fontSize: 13,
-                      color: AppColors.primary.withValues(alpha: 0.6),
+        child: AnimatedBuilder(
+          animation: _ctrl,
+          builder: (_, __) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FadeTransition(
+                opacity: _logoFade,
+                child: ScaleTransition(
+                  scale: _logoScale,
+                  child: SvgPicture.asset(
+                    'assets/svg/logo.svg',
+                    width: 96,
+                    height: 96,
+                    colorFilter: const ColorFilter.mode(
+                      AppColors.primary,
+                      BlendMode.srcIn,
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 32),
+              Opacity(
+                opacity: _textFade.value,
+                child: Column(
+                  children: [
+                    Text(
+                      'harmony',
+                      style: AppTextStyles.appTitle.copyWith(fontSize: 32),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'every moment, together',
+                      style: AppTextStyles.muted.copyWith(
+                        fontSize: 13,
+                        color: AppColors.primary.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

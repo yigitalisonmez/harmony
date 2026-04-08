@@ -1,50 +1,67 @@
-import 'package:flutter/foundation.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'dart:io';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/memory.dart';
+import '../../core/services/storage_service.dart';
 
 class MemoryRepository {
-  static const _boxName = 'memories';
+  MemoryRepository(this.coupleId);
 
-  Box<Memory> get _box => Hive.box<Memory>(_boxName);
+  final String coupleId;
+  final _db = FirebaseFirestore.instance;
 
-  static Future<void> init() async {
-    Hive.registerAdapter(MemoryAdapter());
-    await Hive.openBox<Memory>(_boxName);
+  CollectionReference<Map<String, dynamic>> get _col =>
+      _db.collection('couples').doc(coupleId).collection('memories');
+
+  /// Real-time stream — sorted by date descending.
+  Stream<List<Memory>> watchAll() => _col
+      .orderBy('date', descending: true)
+      .snapshots()
+      .map((snap) =>
+          snap.docs.map((d) => Memory.fromFirestore(d.data())).toList());
+
+  /// Optimistic add: writes metadata immediately, uploads photo in background.
+  Future<void> add(Memory memory) async {
+    // 1. Write to Firestore immediately (no photoUrl yet) → UI updates instantly
+    await _col.doc(memory.id).set(memory.toFirestore());
+
+    // 2. Upload photo in background
+    final file = File(memory.photoPath);
+    if (file.existsSync()) {
+      try {
+        final photoUrl = await StorageService.uploadPhoto(
+          coupleId: coupleId,
+          memoryId: memory.id,
+          file: file,
+        );
+        // 3. Update Firestore with the download URL
+        await _col.doc(memory.id).update({'photoUrl': photoUrl});
+      } catch (e) {
+        // Upload failed — memory still saved, photo will be missing remotely
+        // Can be retried later
+      }
+    }
   }
 
-  List<Memory> getAll() {
-    final memories = _box.values.toList();
-    memories.sort((a, b) => b.date.compareTo(a.date));
-    return memories;
+  Future<void> update(Memory memory) async {
+    await _col.doc(memory.id).update(memory.toFirestore());
   }
 
-  Memory? getById(String id) {
+  Future<void> delete(String id) async {
+    await _col.doc(id).delete();
+    await StorageService.deletePhoto(coupleId: coupleId, memoryId: id);
+  }
+
+  Future<void> toggleFavourite(String id) async {
+    final doc = await _col.doc(id).get();
+    final current = doc.data()?['isFavourite'] as bool? ?? false;
+    await _col.doc(id).update({'isFavourite': !current});
+  }
+
+  Memory? getById(List<Memory> memories, String id) {
     try {
-      return _box.values.firstWhere((m) => m.id == id);
+      return memories.firstWhere((m) => m.id == id);
     } catch (_) {
       return null;
     }
   }
-
-  Future<void> add(Memory memory) async {
-    await _box.put(memory.id, memory);
-  }
-
-  Future<void> update(Memory memory) async {
-    await _box.put(memory.id, memory);
-  }
-
-  Future<void> delete(String id) async {
-    await _box.delete(id);
-  }
-
-  Future<void> toggleFavourite(String id) async {
-    final memory = getById(id);
-    if (memory != null) {
-      memory.isFavourite = !memory.isFavourite;
-      await memory.save();
-    }
-  }
-
-  ValueListenable<Box<Memory>> listenable() => _box.listenable();
 }

@@ -15,7 +15,7 @@ class PixelmapGalleryScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final memories = ref.watch(memoriesProvider);
+    final memories = ref.watch(memoriesProvider).valueOrNull ?? [];
     final withPixelmap = memories
         .where((m) => m.pixelMap != null && m.pixelMap!.length == kPixelMapTotal)
         .toList();

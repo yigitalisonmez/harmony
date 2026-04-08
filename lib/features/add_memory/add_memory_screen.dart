@@ -101,7 +101,7 @@ class _AddMemoryScreenState extends ConsumerState<AddMemoryScreen> {
         pixelMap: pixelMap.isEmpty ? null : pixelMap,
       );
 
-      await ref.read(memoriesProvider.notifier).add(memory);
+      await ref.read(memoriesNotifierProvider).add(memory);
       if (mounted) context.pop();
     } catch (e) {
       _showError('Something went wrong. Please try again.');

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../data/repositories/memory_provider.dart';
@@ -27,7 +28,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final memories = ref.watch(memoriesProvider);
+    final memoriesAsync = ref.watch(memoriesProvider);
+    final memories = memoriesAsync.valueOrNull;
     final daysCount = ref.watch(settingsProvider).daysCount;
 
     return Scaffold(
@@ -41,7 +43,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               onAddTap: () => context.push('/add'),
               onExploreTap: () => context.push('/explore'),
             ),
-            if (memories.isEmpty)
+            // Loading state → shimmer
+            if (memories == null)
+              const Expanded(child: _CardShimmer())
+            else if (memories.isEmpty)
               const Expanded(child: EmptyState())
             else
               Expanded(
@@ -51,10 +56,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   onCardTap: (memory) =>
                       context.push('/memory/${memory.id}'),
                   onFavourite: (memory) => ref
-                      .read(memoriesProvider.notifier)
+                      .read(memoriesNotifierProvider)
                       .toggleFavourite(memory.id),
                   onDelete: (memory) => ref
-                      .read(memoriesProvider.notifier)
+                      .read(memoriesNotifierProvider)
                       .delete(memory.id),
                 ),
               ),
@@ -65,6 +70,57 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
+// ── Card shimmer ──────────────────────────────────────────────────────────────
+class _CardShimmer extends StatelessWidget {
+  const _CardShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      child: Shimmer.fromColors(
+        baseColor: const Color(0xFF1A1A1A),
+        highlightColor: const Color(0xFF2A2A2A),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // Back card 2
+            Positioned(
+              top: 16,
+              child: Transform.scale(
+                scale: 0.92,
+                child: _shimmerCard(),
+              ),
+            ),
+            // Back card 1
+            Positioned(
+              top: 8,
+              child: Transform.scale(
+                scale: 0.96,
+                child: _shimmerCard(),
+              ),
+            ),
+            // Front card
+            _shimmerCard(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _shimmerCard() {
+    return Container(
+      width: double.infinity,
+      height: 480,
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(28),
+      ),
+    );
+  }
+}
+
+// ── App bar ───────────────────────────────────────────────────────────────────
 class _AppBar extends StatelessWidget {
   const _AppBar({
     required this.daysCount,
