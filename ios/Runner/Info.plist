@@ -53,5 +53,8 @@
 	<string>Anılarınıza fotoğraf eklemek için galeri erişimi gerekiyor.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Anılarınıza fotoğraf çekmek için kamera erişimi gerekiyor.</string>
+	<!-- image_picker: iOS 14+ için fotoğraf kaydetme izni -->
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Anılarınızı fotoğraf kütüphanenize kaydedebilmek için izin gerekiyor.</string>
 </dict>
 </plist>

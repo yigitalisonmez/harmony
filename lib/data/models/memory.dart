@@ -3,6 +3,9 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 part 'memory.g.dart';
 
+// Sentinel for distinguishing "not passed" from null in copyWith.
+const Object _sentinel = Object();
+
 @HiveType(typeId: 0)
 class Memory extends HiveObject {
   @HiveField(0)
@@ -35,6 +38,9 @@ class Memory extends HiveObject {
   @HiveField(8)
   final String? photoUrl;
 
+  /// Short emoji / message left by the partner on this memory.
+  final String? partnerReaction;
+
   Memory({
     required this.id,
     required this.photoPath,
@@ -45,6 +51,7 @@ class Memory extends HiveObject {
     this.isFavourite = false,
     this.pixelMap,
     this.photoUrl,
+    this.partnerReaction,
   });
 
   Memory copyWith({
@@ -57,6 +64,7 @@ class Memory extends HiveObject {
     bool? isFavourite,
     List<int>? pixelMap,
     String? photoUrl,
+    Object? partnerReaction = _sentinel,
   }) {
     return Memory(
       id: id ?? this.id,
@@ -68,6 +76,9 @@ class Memory extends HiveObject {
       isFavourite: isFavourite ?? this.isFavourite,
       pixelMap: pixelMap ?? this.pixelMap,
       photoUrl: photoUrl ?? this.photoUrl,
+      partnerReaction: partnerReaction == _sentinel
+          ? this.partnerReaction
+          : partnerReaction as String?,
     );
   }
 
@@ -80,6 +91,7 @@ class Memory extends HiveObject {
         'createdAt': Timestamp.fromDate(createdAt),
         'isFavourite': isFavourite,
         'pixelMap': pixelMap,
+        'partnerReaction': partnerReaction,
       };
 
   static Memory fromFirestore(Map<String, dynamic> data) => Memory(
@@ -94,5 +106,6 @@ class Memory extends HiveObject {
             ? List<int>.from(data['pixelMap'] as List)
             : null,
         photoUrl: data['photoUrl'] as String?,
+        partnerReaction: data['partnerReaction'] as String?,
       );
 }

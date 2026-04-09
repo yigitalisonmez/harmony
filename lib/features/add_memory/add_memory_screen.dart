@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,12 +22,41 @@ class AddMemoryScreen extends ConsumerStatefulWidget {
   ConsumerState<AddMemoryScreen> createState() => _AddMemoryScreenState();
 }
 
+const _notePlaceholders = [
+  'hey cutie, what made this moment special? ♡',
+  'don\'t be shy, tell the story...',
+  'future you will thank you for writing this ✨',
+  'what were you feeling right now?',
+  'a little note goes a long way, love 💌',
+  'whisper something sweet about this day...',
+  'describe it like it\'s your favorite memory ♡',
+  'what do you never want to forget about this?',
+];
+
+const _noteWarnings = [
+  'hey, don\'t leave this blank! memories deserve words ♡',
+  'psst — add a little note, you\'ll love it later 💌',
+  'are you sure? even one sentence makes it magical ✨',
+  'future you is begging for a note right now 🥺',
+  'a photo without words is only half the story...',
+];
+
 class _AddMemoryScreenState extends ConsumerState<AddMemoryScreen> {
   File? _selectedPhoto;
   DateTime _date = DateTime.now();
   final _locationController = TextEditingController();
   final _noteController = TextEditingController();
   bool _isSaving = false;
+  late final String _notePlaceholder;
+  late final String _noteWarning;
+
+  @override
+  void initState() {
+    super.initState();
+    final rng = Random();
+    _notePlaceholder = _notePlaceholders[rng.nextInt(_notePlaceholders.length)];
+    _noteWarning = _noteWarnings[rng.nextInt(_noteWarnings.length)];
+  }
 
   @override
   void dispose() {
@@ -67,6 +97,11 @@ class _AddMemoryScreenState extends ConsumerState<AddMemoryScreen> {
   Future<void> _save() async {
     if (_selectedPhoto == null) {
       _showError('Please pick a photo first.');
+      return;
+    }
+
+    if (_noteController.text.trim().isEmpty) {
+      _showNoteWarning();
       return;
     }
 
@@ -119,6 +154,116 @@ class _AddMemoryScreenState extends ConsumerState<AddMemoryScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
+  }
+
+  void _showNoteWarning() {
+    HapticFeedback.lightImpact();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF111111),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text('♡', style: TextStyle(fontSize: 36)),
+            const SizedBox(height: 12),
+            Text(
+              _noteWarning,
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodyBold.copyWith(fontSize: 16, height: 1.5),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      Navigator.pop(context);
+                      // Save without note
+                      _noteController.clear();
+                      _saveWithoutNote();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.07),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Center(
+                        child: Text('save anyway',
+                            style: AppTextStyles.body
+                                .copyWith(color: Colors.white54)),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Center(
+                        child: Text('add a note',
+                            style: AppTextStyles.bodyBold
+                                .copyWith(color: Colors.white)),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _saveWithoutNote() async {
+    setState(() => _isSaving = true);
+    HapticFeedback.mediumImpact();
+    try {
+      final docsDir = await getApplicationDocumentsDirectory();
+      final photosDir = Directory(p.join(docsDir.path, 'memories'));
+      if (!photosDir.existsSync()) photosDir.createSync(recursive: true);
+      final ext = p.extension(_selectedPhoto!.path);
+      final filename = '${const Uuid().v4()}$ext';
+      final destPath = p.join(photosDir.path, filename);
+      await _selectedPhoto!.copy(destPath);
+      final pixelMap = await generatePixelMap(destPath);
+      final memory = Memory(
+        id: const Uuid().v4(),
+        photoPath: destPath,
+        date: _date,
+        location: _locationController.text.trim().isEmpty
+            ? null : _locationController.text.trim(),
+        note: null,
+        createdAt: DateTime.now(),
+        pixelMap: pixelMap.isEmpty ? null : pixelMap,
+      );
+      await ref.read(memoriesNotifierProvider).add(memory);
+      if (mounted) context.pop();
+    } catch (e) {
+      _showError('Something went wrong. Please try again.');
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -383,7 +528,7 @@ class _AddMemoryScreenState extends ConsumerState<AddMemoryScreen> {
             maxLines: 4,
             minLines: 3,
             decoration: InputDecoration(
-              hintText: '"Write something about this memory..."',
+              hintText: _notePlaceholder,
               hintStyle: AppTextStyles.noteText.copyWith(
                   fontSize: 16, color: AppColors.mutedForeground.withValues(alpha: 0.5)),
               border: InputBorder.none,

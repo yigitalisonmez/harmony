@@ -21,6 +21,7 @@ class MemoryCardStack extends StatefulWidget {
     required this.onCardTap,
     required this.onFavourite,
     required this.onDelete,
+    required this.onReaction,
     this.controller,
   });
 
@@ -28,6 +29,7 @@ class MemoryCardStack extends StatefulWidget {
   final ValueChanged<Memory> onCardTap;
   final ValueChanged<Memory> onFavourite;
   final ValueChanged<Memory> onDelete;
+  final Future<void> Function(String memoryId, String? reaction) onReaction;
   final MemoryCardController? controller;
 
   @override
@@ -243,6 +245,19 @@ class _MemoryCardStackState extends State<MemoryCardStack> {
     );
   }
 
+  void _showReactionSheet(BuildContext context, Memory memory) {
+    HapticFeedback.mediumImpact();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ReactionSheet(
+        initialReaction: memory.partnerReaction,
+        onSave: (reaction) => widget.onReaction(memory.id, reaction),
+      ),
+    );
+  }
+
   Widget _buildNoteSection(Memory memory) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 16, 28, 0),
@@ -276,9 +291,70 @@ class _MemoryCardStackState extends State<MemoryCardStack> {
               Icon(Icons.access_time_outlined,
                   size: 14, color: Colors.white.withValues(alpha: 0.35)),
               const SizedBox(width: 6),
-              Text(
-                timeago.format(memory.createdAt).toUpperCase(),
-                style: AppTextStyles.muted,
+              Expanded(
+                child: Text(
+                  timeago.format(memory.createdAt).toUpperCase(),
+                  style: AppTextStyles.muted,
+                ),
+              ),
+              // ── Partner reaction ────────────────────────────────────
+              GestureDetector(
+                onTap: () => _showReactionSheet(context, memory),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  child: memory.partnerReaction != null &&
+                          memory.partnerReaction!.isNotEmpty
+                      ? Container(
+                          key: ValueKey(memory.partnerReaction),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: AppColors.primary.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                memory.partnerReaction!,
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ],
+                          ),
+                        )
+                      : Container(
+                          key: const ValueKey('empty'),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.04),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.08),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.add_reaction_outlined,
+                                  size: 12,
+                                  color: Colors.white.withValues(alpha: 0.3)),
+                              const SizedBox(width: 4),
+                              Text(
+                                'react',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.white.withValues(alpha: 0.3),
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                ),
               ),
             ],
           ),
@@ -517,6 +593,237 @@ class _HeartBurstState extends State<_HeartBurst>
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Reaction input sheet ──────────────────────────────────────────────────────
+class _ReactionSheet extends StatefulWidget {
+  const _ReactionSheet({
+    required this.initialReaction,
+    required this.onSave,
+  });
+
+  final String? initialReaction;
+  final Future<void> Function(String? reaction) onSave;
+
+  @override
+  State<_ReactionSheet> createState() => _ReactionSheetState();
+}
+
+class _ReactionSheetState extends State<_ReactionSheet> {
+  late final TextEditingController _ctrl;
+  bool _saving = false;
+
+  static const _quickEmojis = [
+    '❤️', '🥰', '😍', '🥲', '😂',
+    '✨', '🔥', '💫', '💕', '🫶',
+    '😭', '🤩', '😘', '💝', '🌸',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.initialReaction ?? '');
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final text = _ctrl.text.trim();
+    setState(() => _saving = true);
+    await widget.onSave(text.isEmpty ? null : text);
+    if (mounted) Navigator.pop(context);
+  }
+
+  Future<void> _clear() async {
+    setState(() => _saving = true);
+    await widget.onSave(null);
+    if (mounted) Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFF111111),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 12, bottom: 20),
+                child: Container(
+                  width: 36, height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                children: [
+                  const Icon(Icons.add_reaction_outlined,
+                      color: AppColors.primary, size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    'leave a reaction',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (widget.initialReaction != null &&
+                      widget.initialReaction!.isNotEmpty)
+                    GestureDetector(
+                      onTap: _saving ? null : _clear,
+                      child: Text(
+                        'remove',
+                        style: TextStyle(
+                          color: Colors.redAccent.withValues(alpha: 0.7),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              height: 44,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                scrollDirection: Axis.horizontal,
+                itemCount: _quickEmojis.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (_, i) {
+                  final emoji = _quickEmojis[i];
+                  final selected = _ctrl.text == emoji;
+                  return GestureDetector(
+                    onTap: () {
+                      _ctrl.text = emoji;
+                      _ctrl.selection = TextSelection.fromPosition(
+                        TextPosition(offset: emoji.length),
+                      );
+                      setState(() {});
+                    },
+                    child: Container(
+                      width: 44, height: 44,
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? AppColors.primary.withValues(alpha: 0.15)
+                            : Colors.white.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: selected
+                              ? AppColors.primary.withValues(alpha: 0.5)
+                              : Colors.white.withValues(alpha: 0.08),
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(emoji, style: const TextStyle(fontSize: 22)),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: TextField(
+                controller: _ctrl,
+                maxLength: 60,
+                maxLines: 1,
+                onChanged: (_) => setState(() {}),
+                style: const TextStyle(color: Colors.white, fontSize: 15),
+                decoration: InputDecoration(
+                  hintText: 'or type something sweet… ♡',
+                  hintStyle: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.25),
+                    fontSize: 14,
+                  ),
+                  counterStyle: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    fontSize: 11,
+                  ),
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.05),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 14),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.1)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.1)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                        color: AppColors.primary.withValues(alpha: 0.5)),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: GestureDetector(
+                onTap: _saving ? null : _save,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  decoration: BoxDecoration(
+                    color: _ctrl.text.trim().isEmpty
+                        ? AppColors.primary.withValues(alpha: 0.3)
+                        : AppColors.primary,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Center(
+                    child: _saving
+                        ? const SizedBox(
+                            width: 18, height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.black,
+                            ),
+                          )
+                        : Text(
+                            'send reaction ♡',
+                            style: TextStyle(
+                              color: _ctrl.text.trim().isEmpty
+                                  ? Colors.black.withValues(alpha: 0.4)
+                                  : Colors.black,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 36),
+          ],
         ),
       ),
     );

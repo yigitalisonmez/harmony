@@ -57,6 +57,10 @@ class MemoryRepository {
     await _col.doc(id).update({'isFavourite': !current});
   }
 
+  Future<void> updateReaction(String id, String? reaction) async {
+    await _col.doc(id).update({'partnerReaction': reaction});
+  }
+
   Memory? getById(List<Memory> memories, String id) {
     try {
       return memories.firstWhere((m) => m.id == id);

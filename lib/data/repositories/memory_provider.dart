@@ -31,4 +31,6 @@ class MemoriesNotifier {
   Future<void> update(Memory memory) => _repo!.update(memory);
   Future<void> delete(String id) => _repo!.delete(id);
   Future<void> toggleFavourite(String id) => _repo!.toggleFavourite(id);
+  Future<void> updateReaction(String id, String? reaction) =>
+      _repo!.updateReaction(id, reaction);
 }
