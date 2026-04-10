@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
+import '../../core/services/notification_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/utils/streak_calculator.dart';
@@ -26,6 +27,19 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _cardController = MemoryCardController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Navigate to memory if app was opened via notification tap
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final route = NotificationService.pendingRoute;
+      if (route != null && mounted) {
+        NotificationService.pendingRoute = null;
+        context.push(route);
+      }
+    });
+  }
 
   @override
   void dispose() {

@@ -2,7 +2,24 @@
   "permissions": {
     "allow": [
       "Bash(flutter pub:*)",
-      "Bash(flutter analyze:*)"
+      "Bash(flutter analyze:*)",
+      "WebFetch(domain:www.youtube.com)",
+      "WebFetch(domain:pub.dev)",
+      "Bash(dart --version)",
+      "Bash(flutter upgrade:*)",
+      "WebSearch",
+      "WebFetch(domain:colorhunt.co)",
+      "WebFetch(domain:www.color-hex.com)",
+      "WebFetch(domain:paperheartdesign.com)",
+      "WebFetch(domain:www.color-meanings.com)",
+      "Bash(keytool -list -v -keystore \"%USERPROFILE%\\\\.android\\\\debug.keystore\" -alias androiddebugkey -storepass android -keypass android)",
+      "Bash(keytool -list -v -keystore \"C:\\\\Users\\\\yigit\\\\.android\\\\debug.keystore\" -alias androiddebugkey -storepass android -keypass android)",
+      "Bash(find C:UsersyigitAppDataLocalPubCachehostedpub.dev -name *.dart -path *card_stack*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(python -c \"import json; d=json.load\\(open\\(''C:/WorkSpace/Flutter/harmony/android/app/google-services.json''\\)\\); [print\\(c.get\\(''client_info'',{}\\).get\\(''android_client_info'',{}\\).get\\(''package_name'',''''\\)\\) for c in d.get\\(''client'',[]\\)]\")",
+      "Bash(dart analyze:*)"
     ]
   }
 }

@@ -8,6 +8,7 @@ import 'core/router/app_router.dart'
     show appRouter, routerCoupleNotifier, routerBootstrapNotifier;
 import 'core/theme/app_theme.dart';
 import 'core/services/auth_service.dart';
+import 'core/services/notification_service.dart';
 import 'data/repositories/couple_provider.dart';
 import 'data/repositories/settings_repository.dart';
 import 'data/repositories/bucket_list_repository.dart';
@@ -76,6 +77,9 @@ class _HarmonyAppState extends ConsumerState<HarmonyApp> {
 
     // Bootstrap done — router can now make redirect decisions
     routerBootstrapNotifier.value = true;
+
+    // Init push notifications after auth is ready
+    await NotificationService.init();
   }
 
   @override

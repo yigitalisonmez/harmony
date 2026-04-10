@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/add_memory/add_memory_screen.dart';
@@ -13,7 +12,6 @@ import '../../features/bucket_list/bucket_list_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/splash/splash_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
-import '../../data/repositories/couple_provider.dart';
 
 /// Updated when coupleId is known.
 final routerCoupleNotifier = ValueNotifier<String?>(null);
@@ -21,7 +19,11 @@ final routerCoupleNotifier = ValueNotifier<String?>(null);
 /// True once _bootstrap() in main.dart finishes — prevents premature redirects.
 final routerBootstrapNotifier = ValueNotifier<bool>(false);
 
+/// Global navigator key — used by NotificationService to navigate after tap.
+final rootNavigatorKey = GlobalKey<NavigatorState>();
+
 final appRouter = GoRouter(
+  navigatorKey: rootNavigatorKey,
   initialLocation: '/splash',
   refreshListenable: Listenable.merge([
     routerCoupleNotifier,

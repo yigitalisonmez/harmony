@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/memory.dart';
+import '../../core/services/auth_service.dart';
 import '../../core/services/storage_service.dart';
 
 class MemoryRepository {
@@ -22,7 +23,10 @@ class MemoryRepository {
   /// Optimistic add: writes metadata immediately, uploads photo in background.
   Future<void> add(Memory memory) async {
     // 1. Write to Firestore immediately (no photoUrl yet) → UI updates instantly
-    await _col.doc(memory.id).set(memory.toFirestore());
+    await _col.doc(memory.id).set({
+      ...memory.toFirestore(),
+      'creatorUid': AuthService.uid, // used by Cloud Functions to target partner
+    });
 
     // 2. Upload photo in background
     final file = File(memory.photoPath);
