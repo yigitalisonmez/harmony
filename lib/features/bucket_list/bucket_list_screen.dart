@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/services/places_search_service.dart';
 import '../../data/repositories/bucket_list_provider.dart';
+import '../../data/repositories/movie_provider.dart';
 import '../../data/repositories/places_provider.dart';
 import '../../data/repositories/places_repository.dart';
 
@@ -24,7 +25,7 @@ class _BucketListScreenState extends ConsumerState<BucketListScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 2, vsync: this);
+    _tab = TabController(length: 3, vsync: this);
     _tab.addListener(() => setState(() {}));
   }
 
@@ -36,10 +37,12 @@ class _BucketListScreenState extends ConsumerState<BucketListScreen>
 
   @override
   Widget build(BuildContext context) {
-    final items  = ref.watch(bucketListProvider);
-    final places = ref.watch(placesProvider);
+    final items   = ref.watch(bucketListProvider);
+    final places  = ref.watch(placesProvider);
+    final movies  = ref.watch(moviesProvider);
     final pending = items.where((i) => !i.isCompleted).length;
     final visited = places.where((p) => p.isVisited).length;
+    final watched = movies.where((m) => m.isWatched).length;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -75,7 +78,9 @@ class _BucketListScreenState extends ConsumerState<BucketListScreen>
                       Text(
                         _tab.index == 0
                             ? '$pending plans left'
-                            : '$visited of ${places.length} visited',
+                            : _tab.index == 1
+                                ? '$visited of ${places.length} visited'
+                                : '$watched of ${movies.length} watched',
                         style: AppTextStyles.muted,
                       ),
                     ],
@@ -114,6 +119,7 @@ class _BucketListScreenState extends ConsumerState<BucketListScreen>
                   tabs: const [
                     Tab(text: 'Plans'),
                     Tab(text: 'Places'),
+                    Tab(text: 'Movies'),
                   ],
                 ),
               ),
@@ -127,6 +133,7 @@ class _BucketListScreenState extends ConsumerState<BucketListScreen>
                 children: const [
                   _PlansTab(),
                   _PlacesTab(),
+                  _MoviesTab(),
                 ],
               ),
             ),
@@ -846,6 +853,262 @@ class _PlanTileState extends State<_PlanTile> {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// MOVIES TAB
+// ══════════════════════════════════════════════════════════════════════════════
+
+class _MoviesTab extends ConsumerStatefulWidget {
+  const _MoviesTab();
+
+  @override
+  ConsumerState<_MoviesTab> createState() => _MoviesTabState();
+}
+
+class _MoviesTabState extends ConsumerState<_MoviesTab> {
+  final _addCtrl = TextEditingController();
+  final _focusNode = FocusNode();
+  bool _adding = false;
+
+  @override
+  void dispose() {
+    _addCtrl.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final text = _addCtrl.text.trim();
+    if (text.isEmpty) return;
+    await ref.read(moviesProvider.notifier).add(text);
+    _addCtrl.clear();
+    HapticFeedback.lightImpact();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final movies  = ref.watch(moviesProvider);
+    final pending = movies.where((m) => !m.isWatched).toList();
+    final watched = movies.where((m) => m.isWatched).toList();
+    final bottomPad = MediaQuery.of(context).viewInsets.bottom;
+
+    return Column(
+      children: [
+        Expanded(
+          child: movies.isEmpty
+              ? _EmptyHint(
+                  icon: Icons.movie_outlined,
+                  message: 'Add movies you want to\nwatch together.',
+                  onAdd: () {
+                    setState(() => _adding = true);
+                    _focusNode.requestFocus();
+                  },
+                )
+              : ListView(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                  children: [
+                    ...pending.map((m) => _MovieTile(
+                          key: ValueKey(m.id),
+                          movie: m,
+                          onToggle: () {
+                            HapticFeedback.mediumImpact();
+                            ref.read(moviesProvider.notifier).toggle(m.id);
+                          },
+                          onDelete: () =>
+                              ref.read(moviesProvider.notifier).delete(m.id),
+                          onEdit: (t) => ref
+                              .read(moviesProvider.notifier)
+                              .updateTitle(m.id, t),
+                        )),
+                    if (watched.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      _SectionDivider(label: 'WATCHED (${watched.length})'),
+                      ...watched.map((m) => _MovieTile(
+                            key: ValueKey(m.id),
+                            movie: m,
+                            onToggle: () {
+                              HapticFeedback.lightImpact();
+                              ref.read(moviesProvider.notifier).toggle(m.id);
+                            },
+                            onDelete: () =>
+                                ref.read(moviesProvider.notifier).delete(m.id),
+                            onEdit: (t) => ref
+                                .read(moviesProvider.notifier)
+                                .updateTitle(m.id, t),
+                          )),
+                    ],
+                    const SizedBox(height: 80),
+                  ],
+                ),
+        ),
+        _AddBar(
+          ctrl: _addCtrl,
+          focusNode: _focusNode,
+          isActive: _adding,
+          bottomPad: bottomPad,
+          hint: 'Add a movie to watch together…',
+          onFocus: () => setState(() => _adding = true),
+          onSubmit: _submit,
+        ),
+      ],
+    );
+  }
+}
+
+class _MovieTile extends StatefulWidget {
+  const _MovieTile({
+    super.key,
+    required this.movie,
+    required this.onToggle,
+    required this.onDelete,
+    required this.onEdit,
+  });
+
+  final MovieItem movie;
+  final VoidCallback onToggle;
+  final VoidCallback onDelete;
+  final ValueChanged<String> onEdit;
+
+  @override
+  State<_MovieTile> createState() => _MovieTileState();
+}
+
+class _MovieTileState extends State<_MovieTile> {
+  bool _editing = false;
+  late final TextEditingController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.movie.title);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _saveEdit() {
+    if (_ctrl.text.trim().isNotEmpty) widget.onEdit(_ctrl.text.trim());
+    setState(() => _editing = false);
+    FocusScope.of(context).unfocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final watched = widget.movie.isWatched;
+
+    return Dismissible(
+      key: ValueKey(widget.movie.id),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        margin: const EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(
+          color: Colors.red.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: const Icon(Icons.delete_outline,
+            color: Colors.redAccent, size: 22),
+      ),
+      onDismissed: (_) => widget.onDelete(),
+      child: GestureDetector(
+        onLongPress: () => setState(() => _editing = true),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: watched
+                ? Colors.white.withValues(alpha: 0.03)
+                : const Color(0xFF111111),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: watched
+                  ? Colors.white.withValues(alpha: 0.04)
+                  : Colors.white.withValues(alpha: 0.07),
+            ),
+          ),
+          child: Row(
+            children: [
+              // Watched toggle
+              GestureDetector(
+                onTap: widget.onToggle,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 24, height: 24,
+                  decoration: BoxDecoration(
+                    color: watched ? AppColors.primary : Colors.transparent,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: watched
+                          ? AppColors.primary
+                          : Colors.white.withValues(alpha: 0.25),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: watched
+                      ? const Icon(Icons.check, color: Colors.black, size: 14)
+                      : null,
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Movie icon
+              Container(
+                width: 32, height: 32,
+                decoration: BoxDecoration(
+                  color: watched
+                      ? Colors.white.withValues(alpha: 0.04)
+                      : AppColors.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.movie_outlined,
+                  size: 16,
+                  color: watched
+                      ? Colors.white.withValues(alpha: 0.2)
+                      : AppColors.primary.withValues(alpha: 0.7),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Title
+              Expanded(
+                child: _editing
+                    ? TextField(
+                        controller: _ctrl,
+                        autofocus: true,
+                        style: AppTextStyles.body,
+                        cursorColor: AppColors.primary,
+                        onEditingComplete: _saveEdit,
+                        decoration: const InputDecoration(
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      )
+                    : Text(
+                        widget.movie.title,
+                        style: AppTextStyles.body.copyWith(
+                          color: watched
+                              ? Colors.white.withValues(alpha: 0.3)
+                              : Colors.white.withValues(alpha: 0.9),
+                          decoration: watched
+                              ? TextDecoration.lineThrough
+                              : null,
+                          decorationColor:
+                              Colors.white.withValues(alpha: 0.3),
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // SHARED HELPERS
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -857,6 +1120,7 @@ class _AddBar extends StatelessWidget {
     required this.bottomPad,
     required this.onFocus,
     required this.onSubmit,
+    this.hint = 'Add something to do together…',
   });
 
   final TextEditingController ctrl;
@@ -865,6 +1129,7 @@ class _AddBar extends StatelessWidget {
   final double bottomPad;
   final VoidCallback onFocus;
   final VoidCallback onSubmit;
+  final String hint;
 
   @override
   Widget build(BuildContext context) {
@@ -898,7 +1163,7 @@ class _AddBar extends StatelessWidget {
                 onTap: onFocus,
                 onEditingComplete: onSubmit,
                 decoration: InputDecoration(
-                  hintText: 'Add something to do together…',
+                  hintText: hint,
                   hintStyle: AppTextStyles.muted,
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(

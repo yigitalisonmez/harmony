@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'core/router/app_router.dart'
@@ -13,6 +12,7 @@ import 'data/repositories/couple_provider.dart';
 import 'data/repositories/settings_repository.dart';
 import 'data/repositories/bucket_list_repository.dart';
 import 'data/repositories/places_repository.dart';
+import 'data/repositories/movie_repository.dart';
 import 'firebase_options.dart';
 
 void main() async {
@@ -34,6 +34,7 @@ void main() async {
   await SettingsRepository.init();
   await BucketListRepository.init();
   await PlacesRepository.init();
+  await MovieRepository.init();
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
