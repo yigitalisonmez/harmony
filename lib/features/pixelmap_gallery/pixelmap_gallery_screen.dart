@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -195,6 +196,27 @@ class _PixelRevealPageState extends State<_PixelRevealPage>
     super.dispose();
   }
 
+  Widget _buildPhoto(Memory memory) {
+    final file = File(memory.photoPath);
+    if (memory.photoPath.isNotEmpty && file.existsSync()) {
+      return Image.file(file,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity);
+    }
+    if (memory.photoUrl != null) {
+      return CachedNetworkImage(
+        imageUrl: memory.photoUrl!,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        placeholder: (_, __) => const ColoredBox(color: Colors.black),
+        errorWidget: (_, __, ___) => const ColoredBox(color: Colors.black),
+      );
+    }
+    return const ColoredBox(color: Colors.black);
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
@@ -207,12 +229,7 @@ class _PixelRevealPageState extends State<_PixelRevealPage>
           fit: StackFit.expand,
           children: [
             // Real photo (revealed as pixel art fades)
-            Image.file(
-              File(widget.memory.photoPath),
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
-            ),
+            _buildPhoto(widget.memory),
             // Pixel art overlay fading out
             AnimatedBuilder(
               animation: _anim,
