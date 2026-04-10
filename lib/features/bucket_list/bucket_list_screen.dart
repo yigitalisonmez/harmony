@@ -1133,8 +1133,9 @@ class _AddBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final safeBottom = MediaQuery.of(context).padding.bottom;
     return Container(
-      padding: EdgeInsets.fromLTRB(16, 10, 16, 16 + bottomPad),
+      padding: EdgeInsets.fromLTRB(16, 10, 16, 16 + bottomPad + safeBottom),
       decoration: BoxDecoration(
         color: const Color(0xFF0A0A0A),
         border: Border(
