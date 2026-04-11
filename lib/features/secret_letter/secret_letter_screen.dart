@@ -219,7 +219,7 @@ class _SecretLetterScreenState extends ConsumerState<SecretLetterScreen>
                           controller: null,
                           asyncValue: partnerLetterAsync,
                           emptyHint:
-                              'Your partner hasn\'t written\nanything yet. ♡',
+                              'maybe they\'re too busy loving you\nto find the right words yet ♡',
                           readOnly: true,
                         )
                       : _PartnerNotJoined(),

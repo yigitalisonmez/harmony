@@ -21,13 +21,42 @@ class AuthService {
     return doc.data()?['coupleId'] as String?;
   }
 
-  /// Joins an existing couple by start date code, or creates one if it doesn't exist.
-  /// Code = DDMMYY (e.g. "220925" for Sep 22, 2025).
-  /// Returns coupleId.
-  static Future<String> joinOrCreateCouple({
-    required String code,
-    required DateTime startDate,
-  }) async {
+  /// Saves the user's display name to Firestore (users + couples docs).
+  static Future<void> setName(String coupleId, String name) async {
+    final uid = AuthService.uid!;
+    final batch = _db.batch();
+    batch.update(_db.collection('users').doc(uid), {'name': name});
+    batch.update(_db.collection('couples').doc(coupleId), {
+      'names.$uid': name,
+    });
+    await batch.commit();
+  }
+
+  /// Returns the name for the current user from Firestore, or null.
+  static Future<String?> getMyName() async {
+    final uid = AuthService.uid;
+    if (uid == null) return null;
+    final doc = await _db.collection('users').doc(uid).get();
+    return doc.data()?['name'] as String?;
+  }
+
+  /// Returns all {uid → name} entries for the couple.
+  static Future<Map<String, String>> getCoupleNames(String coupleId) async {
+    final doc = await _db.collection('couples').doc(coupleId).get();
+    final raw = doc.data()?['names'] as Map<String, dynamic>? ?? {};
+    return raw.map((k, v) => MapEntry(k, v as String));
+  }
+
+  /// The one and only valid access code for this couple.
+  static const coupleAccessCode = '210925';
+
+  /// Validates the code and connects this device to the couple.
+  /// Returns the coupleId on success, throws on wrong code or not found.
+  static Future<String> loginWithCode(String code) async {
+    if (code != coupleAccessCode) {
+      throw Exception('wrong_code');
+    }
+
     final uid = AuthService.uid!;
 
     final snap = await _db
@@ -36,42 +65,33 @@ class AuthService {
         .limit(1)
         .get();
 
-    if (snap.docs.isNotEmpty) {
-      // Couple exists — join it
-      final coupleDoc = snap.docs.first;
-      final coupleId = coupleDoc.id;
-      final members = List<String>.from(coupleDoc.data()['members'] ?? []);
+    if (snap.docs.isEmpty) {
+      throw Exception('couple_not_found');
+    }
 
-      if (!members.contains(uid)) {
-        final batch = _db.batch();
-        batch.update(coupleDoc.reference, {
+    final coupleDoc = snap.docs.first;
+    final coupleId = coupleDoc.id;
+    final members = List<String>.from(coupleDoc.data()['members'] ?? []);
+
+    // Add this UID to members if not already there
+    if (!members.contains(uid)) {
+      await _db.batch()
+        ..update(coupleDoc.reference, {
           'members': FieldValue.arrayUnion([uid]),
-        });
-        batch.set(_db.collection('users').doc(uid), {
+        })
+        ..set(_db.collection('users').doc(uid), {
           'coupleId': coupleId,
           'createdAt': FieldValue.serverTimestamp(),
-        });
-        await batch.commit();
-      }
-      return coupleId;
+        })
+        ..commit();
     } else {
-      // No couple with this code — create one
-      final coupleRef = _db.collection('couples').doc();
-      final coupleId = coupleRef.id;
-
-      final batch = _db.batch();
-      batch.set(coupleRef, {
-        'members': [uid],
-        'joinCode': code,
-        'startDate': Timestamp.fromDate(startDate),
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-      batch.set(_db.collection('users').doc(uid), {
-        'coupleId': coupleId,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-      await batch.commit();
-      return coupleId;
+      // Already a member — just make sure users doc is up to date
+      await _db.collection('users').doc(uid).set(
+        {'coupleId': coupleId},
+        SetOptions(merge: true),
+      );
     }
+
+    return coupleId;
   }
 }

@@ -18,13 +18,8 @@ class MoviesNotifier extends StateNotifier<List<MovieItem>> {
 
   void _load() => state = _repo.getAll();
 
-  Future<void> add(String title) async {
-    await _repo.add(MovieItem(
-      id: MovieRepository.newId(),
-      title: title,
-      isWatched: false,
-      createdAt: DateTime.now(),
-    ));
+  Future<void> add(MovieItem item) async {
+    await _repo.add(item);
     _load();
   }
 

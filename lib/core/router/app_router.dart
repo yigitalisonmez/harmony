@@ -12,12 +12,16 @@ import '../../features/bucket_list/bucket_list_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/splash/splash_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
+import '../../features/identity/identity_screen.dart';
 
 /// Updated when coupleId is known.
 final routerCoupleNotifier = ValueNotifier<String?>(null);
 
 /// True once _bootstrap() in main.dart finishes — prevents premature redirects.
 final routerBootstrapNotifier = ValueNotifier<bool>(false);
+
+/// True once the user has selected their identity (name).
+final routerIdentityNotifier = ValueNotifier<bool>(false);
 
 /// Global navigator key — used by NotificationService to navigate after tap.
 final rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -28,21 +32,23 @@ final appRouter = GoRouter(
   refreshListenable: Listenable.merge([
     routerCoupleNotifier,
     routerBootstrapNotifier,
+    routerIdentityNotifier,
   ]),
   redirect: (context, state) {
     final bootstrapDone = routerBootstrapNotifier.value;
-    final coupleId = routerCoupleNotifier.value;
-    final isOnboarding = state.matchedLocation == '/onboarding';
-    final isSplash = state.matchedLocation == '/splash';
+    final identitySet = routerIdentityNotifier.value;
+    final loc = state.matchedLocation;
 
-    // Always show splash; let it navigate when ready
-    if (isSplash) return null;
-
-    // Don't redirect until bootstrap completes — prevents onboarding flash
+    if (loc == '/splash') return null;
     if (!bootstrapDone) return null;
 
-    if (coupleId == null && !isOnboarding) return '/onboarding';
-    if (coupleId != null && isOnboarding) return '/';
+    // Identity not set → always go to identity screen (handles date code + persona)
+    if (!identitySet) {
+      return loc == '/identity' ? null : '/identity';
+    }
+
+    // Fully set up → home
+    if (loc == '/onboarding' || loc == '/identity') return '/';
 
     return null;
   },
@@ -50,6 +56,15 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/splash',
       builder: (context, state) => const SplashScreen(),
+    ),
+    GoRoute(
+      path: '/identity',
+      pageBuilder: (context, state) => CustomTransitionPage(
+        key: state.pageKey,
+        child: const IdentityScreen(),
+        transitionsBuilder: (context, animation, _, child) =>
+            FadeTransition(opacity: animation, child: child),
+      ),
     ),
     GoRoute(
       path: '/onboarding',

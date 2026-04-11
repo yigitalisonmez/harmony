@@ -331,7 +331,7 @@ class _EmptyState extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
-            Text('No pixel maps yet',
+            Text('every great love story has a first stroke — yours is waiting',
                 style: AppTextStyles.appTitle.copyWith(fontSize: 18)),
             const SizedBox(height: 10),
             Text(

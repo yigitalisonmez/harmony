@@ -4,6 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../core/services/identity_service.dart';
+import '../../core/router/app_router.dart' show routerIdentityNotifier;
+import '../../data/repositories/couple_provider.dart';
 import '../../data/repositories/settings_provider.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -16,7 +19,8 @@ class SettingsScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Column(
+        child: SingleChildScrollView(
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
@@ -74,6 +78,22 @@ class SettingsScreen extends ConsumerWidget {
                     onTap: () => context.push('/secret-pin'),
                   ),
                   const SizedBox(height: 24),
+                  // ─── Dev ────────────────────────────────────────────────
+                  Text('DEV', style: AppTextStyles.muted.copyWith(fontSize: 10)),
+                  const SizedBox(height: 12),
+                  _SettingsTile(
+                    icon: Icons.switch_account_outlined,
+                    iconColor: Colors.orangeAccent,
+                    title: 'Reset Identity',
+                    subtitle: 'Switch to a different person',
+                    onTap: () async {
+                      await IdentityService.clear();
+                      ref.read(myNameProvider.notifier).state = null;
+                      routerIdentityNotifier.value = false;
+                      if (context.mounted) context.go('/identity');
+                    },
+                  ),
+                  const SizedBox(height: 24),
                   // ─── About ──────────────────────────────────────────────
                   Text('ABOUT', style: AppTextStyles.muted.copyWith(fontSize: 10)),
                   const SizedBox(height: 12),
@@ -90,10 +110,12 @@ class SettingsScreen extends ConsumerWidget {
                     title: 'Version',
                     subtitle: '1.0.0',
                   ),
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
           ],
+        ),
         ),
       ),
     );
