@@ -14,23 +14,31 @@ class SplashScreen extends ConsumerStatefulWidget {
 }
 
 class _SplashScreenState extends ConsumerState<SplashScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
+  // ── Entrance animation ───────────────────────────────────────────────────────
   late final AnimationController _ctrl;
   late final Animation<double> _logoScale;
   late final Animation<double> _logoFade;
   late final Animation<double> _textFade;
+
+  // ── Heartbeat loop ───────────────────────────────────────────────────────────
+  late final AnimationController _heartCtrl;
+  late final Animation<double> _heartbeat;
+  late final Animation<double> _glowPulse;
+
   bool _navigated = false;
 
   @override
   void initState() {
     super.initState();
 
+    // ── Entrance ─────────────────────────────────────────────────────────────
     _ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2200),
+      duration: const Duration(milliseconds: 1800),
     );
 
-    _logoScale = Tween<double>(begin: 0.6, end: 1.0).animate(
+    _logoScale = Tween<double>(begin: 0.55, end: 1.0).animate(
       CurvedAnimation(
         parent: _ctrl,
         curve: const Interval(0.0, 0.5, curve: Curves.easeOutBack),
@@ -47,13 +55,70 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     _textFade = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _ctrl,
-        curve: const Interval(0.6, 1.0, curve: Curves.easeIn),
+        curve: const Interval(0.55, 1.0, curve: Curves.easeIn),
       ),
     );
 
-    _ctrl.forward();
+    // ── Heartbeat (lub-dub pattern) ──────────────────────────────────────────
+    // Duration: 900ms per beat — lub(fast) dub(fast) pause
+    _heartCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
 
-    Future.delayed(const Duration(milliseconds: 3000), () {
+    // Scale: 1.0 → 1.14 → 0.97 → 1.1 → 1.0 → hold
+    _heartbeat = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 1.14)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 12,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.14, end: 0.97)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 10,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 0.97, end: 1.1)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 10,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.1, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 10,
+      ),
+      // Pause between beats
+      TweenSequenceItem(
+        tween: ConstantTween<double>(1.0),
+        weight: 58,
+      ),
+    ]).animate(_heartCtrl);
+
+    // Glow: pulses with the beat (0.0 → 1.0 → 0.0 over first half)
+    _glowPulse = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 0.0, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 22,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 20,
+      ),
+      TweenSequenceItem(
+        tween: ConstantTween<double>(0.0),
+        weight: 58,
+      ),
+    ]).animate(_heartCtrl);
+
+    // Start entrance, then kick off heartbeat loop
+    _ctrl.forward().then((_) {
+      if (mounted) _heartCtrl.repeat();
+    });
+
+    Future.delayed(const Duration(milliseconds: 3200), () {
       if (mounted && !_navigated) {
         _navigated = true;
         context.go('/');
@@ -64,6 +129,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   @override
   void dispose() {
     _ctrl.dispose();
+    _heartCtrl.dispose();
     super.dispose();
   }
 
@@ -78,8 +144,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Watching memoriesProvider here starts the Firestore subscription early.
-    // By the time HomeScreen mounts, data is already in Riverpod's cache.
     final memoriesAsync = ref.watch(memoriesProvider);
     memoriesAsync.whenData(_precachePhotos);
 
@@ -87,7 +151,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       backgroundColor: AppColors.background,
       body: Center(
         child: AnimatedBuilder(
-          animation: _ctrl,
+          animation: Listenable.merge([_ctrl, _heartCtrl]),
           builder: (_, __) => Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -95,13 +159,29 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 opacity: _logoFade,
                 child: ScaleTransition(
                   scale: _logoScale,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(24),
-                    child: Image.asset(
-                      'assets/logo/app_logo.jpg',
-                      width: 96,
-                      height: 96,
-                      fit: BoxFit.cover,
+                  child: ScaleTransition(
+                    scale: _heartbeat,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(26),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary
+                                .withValues(alpha: 0.5 * _glowPulse.value),
+                            blurRadius: 32 * _glowPulse.value,
+                            spreadRadius: 4 * _glowPulse.value,
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(24),
+                        child: Image.asset(
+                          'assets/logo/app_logo.jpg',
+                          width: 96,
+                          height: 96,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
                     ),
                   ),
                 ),
