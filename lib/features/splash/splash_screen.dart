@@ -1,7 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
@@ -96,13 +95,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 opacity: _logoFade,
                 child: ScaleTransition(
                   scale: _logoScale,
-                  child: SvgPicture.asset(
-                    'assets/svg/logo.svg',
-                    width: 96,
-                    height: 96,
-                    colorFilter: const ColorFilter.mode(
-                      AppColors.primary,
-                      BlendMode.srcIn,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: Image.asset(
+                      'assets/logo/app_logo.jpg',
+                      width: 96,
+                      height: 96,
+                      fit: BoxFit.cover,
                     ),
                   ),
                 ),
