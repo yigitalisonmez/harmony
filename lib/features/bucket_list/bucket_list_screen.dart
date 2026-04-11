@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,10 +7,21 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/services/places_search_service.dart';
+import '../../core/services/tmdb_search_service.dart';
+import '../../core/services/auth_service.dart';
 import '../../data/repositories/bucket_list_provider.dart';
+import '../../data/repositories/couple_provider.dart';
 import '../../data/repositories/movie_provider.dart';
+import '../../data/repositories/movie_repository.dart';
 import '../../data/repositories/places_provider.dart';
 import '../../data/repositories/places_repository.dart';
+import '../../data/models/wish.dart';
+import '../../data/repositories/wish_provider.dart';
+
+const _berfinGif         = 'assets/Young_slim_Mediterranean_female_with_long_wavy_dar_breathing-idle_south-east.gif';
+const _yigitaliGif       = 'assets/Young_brunette_male_with_curly_black_hair_short_be_breathing-idle_west.gif';
+const _berfinCelebGif    = 'assets/Young_slim_Mediterranean_female_with_long_wavy_dar_custom-She throws her arms up in joy _south-east.gif';
+const _yigitaliCelebGif  = 'assets/Young_brunette_male_with_curly_black_hair_short_be_custom-He lifts his arms in the air, _south-east.gif';
 
 class BucketListScreen extends ConsumerStatefulWidget {
   const BucketListScreen({super.key});
@@ -25,7 +37,7 @@ class _BucketListScreenState extends ConsumerState<BucketListScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 3, vsync: this);
+    _tab = TabController(length: 4, vsync: this);
     _tab.addListener(() => setState(() {}));
   }
 
@@ -80,7 +92,9 @@ class _BucketListScreenState extends ConsumerState<BucketListScreen>
                             ? '$pending plans left'
                             : _tab.index == 1
                                 ? '$visited of ${places.length} visited'
-                                : '$watched of ${movies.length} watched',
+                                : _tab.index == 2
+                                    ? '$watched of ${movies.length} watched'
+                                    : 'what do you wish for?',
                         style: AppTextStyles.muted,
                       ),
                     ],
@@ -120,6 +134,7 @@ class _BucketListScreenState extends ConsumerState<BucketListScreen>
                     Tab(text: 'Plans'),
                     Tab(text: 'Places'),
                     Tab(text: 'Movies'),
+                    Tab(text: 'Wishes'),
                   ],
                 ),
               ),
@@ -134,6 +149,7 @@ class _BucketListScreenState extends ConsumerState<BucketListScreen>
                   _PlansTab(),
                   _PlacesTab(),
                   _MoviesTab(),
+                  _WishesTab(),
                 ],
               ),
             ),
@@ -177,7 +193,8 @@ class _PlansTabState extends ConsumerState<_PlansTab> {
 
   @override
   Widget build(BuildContext context) {
-    final items   = ref.watch(bucketListProvider);
+    final items       = ref.watch(bucketListProvider);
+    final joinedWishes = ref.watch(joinedWishesProvider);
     final pending = items.where((i) => !i.isCompleted).toList();
     final done    = items.where((i) => i.isCompleted).toList();
     final bottomPad = MediaQuery.of(context).viewInsets.bottom;
@@ -185,7 +202,7 @@ class _PlansTabState extends ConsumerState<_PlansTab> {
     return Column(
       children: [
         Expanded(
-          child: items.isEmpty
+          child: items.isEmpty && joinedWishes.isEmpty
               ? _EmptyHint(
                   icon: Icons.checklist_rounded,
                   message: 'Add things you want to\nexperience together.',
@@ -213,6 +230,7 @@ class _PlansTabState extends ConsumerState<_PlansTab> {
                               .read(bucketListProvider.notifier)
                               .updateTitle(item.id, t),
                         )),
+                    ...joinedWishes.map((w) => _SharedWishTile(wish: w)),
                     if (done.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       _SectionDivider(label: 'COMPLETED (${done.length})'),
@@ -856,60 +874,46 @@ class _PlanTileState extends State<_PlanTile> {
 // MOVIES TAB
 // ══════════════════════════════════════════════════════════════════════════════
 
-class _MoviesTab extends ConsumerStatefulWidget {
+class _MoviesTab extends ConsumerWidget {
   const _MoviesTab();
 
   @override
-  ConsumerState<_MoviesTab> createState() => _MoviesTabState();
-}
-
-class _MoviesTabState extends ConsumerState<_MoviesTab> {
-  final _addCtrl = TextEditingController();
-  final _focusNode = FocusNode();
-  bool _adding = false;
-
-  @override
-  void dispose() {
-    _addCtrl.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    final text = _addCtrl.text.trim();
-    if (text.isEmpty) return;
-    await ref.read(moviesProvider.notifier).add(text);
-    _addCtrl.clear();
-    HapticFeedback.lightImpact();
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final movies  = ref.watch(moviesProvider);
     final pending = movies.where((m) => !m.isWatched).toList();
     final watched = movies.where((m) => m.isWatched).toList();
-    final bottomPad = MediaQuery.of(context).viewInsets.bottom;
 
-    return Column(
+    return Stack(
       children: [
-        Expanded(
-          child: movies.isEmpty
-              ? _EmptyHint(
-                  icon: Icons.movie_outlined,
-                  message: 'Add movies you want to\nwatch together.',
-                  onAdd: () {
-                    setState(() => _adding = true);
-                    _focusNode.requestFocus();
-                  },
-                )
-              : ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                  children: [
-                    ...pending.map((m) => _MovieTile(
+        movies.isEmpty
+            ? _EmptyHint(
+                icon: Icons.movie_outlined,
+                message: 'Search for movies you want\nto watch together.',
+              )
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+                children: [
+                  ...pending.map((m) => _MovieTile(
+                        key: ValueKey(m.id),
+                        movie: m,
+                        onToggle: () {
+                          HapticFeedback.mediumImpact();
+                          ref.read(moviesProvider.notifier).toggle(m.id);
+                        },
+                        onDelete: () =>
+                            ref.read(moviesProvider.notifier).delete(m.id),
+                        onEdit: (t) => ref
+                            .read(moviesProvider.notifier)
+                            .updateTitle(m.id, t),
+                      )),
+                  if (watched.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    _SectionDivider(label: 'WATCHED (${watched.length})'),
+                    ...watched.map((m) => _MovieTile(
                           key: ValueKey(m.id),
                           movie: m,
                           onToggle: () {
-                            HapticFeedback.mediumImpact();
+                            HapticFeedback.lightImpact();
                             ref.read(moviesProvider.notifier).toggle(m.id);
                           },
                           onDelete: () =>
@@ -918,37 +922,63 @@ class _MoviesTabState extends ConsumerState<_MoviesTab> {
                               .read(moviesProvider.notifier)
                               .updateTitle(m.id, t),
                         )),
-                    if (watched.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      _SectionDivider(label: 'WATCHED (${watched.length})'),
-                      ...watched.map((m) => _MovieTile(
-                            key: ValueKey(m.id),
-                            movie: m,
-                            onToggle: () {
-                              HapticFeedback.lightImpact();
-                              ref.read(moviesProvider.notifier).toggle(m.id);
-                            },
-                            onDelete: () =>
-                                ref.read(moviesProvider.notifier).delete(m.id),
-                            onEdit: (t) => ref
-                                .read(moviesProvider.notifier)
-                                .updateTitle(m.id, t),
-                          )),
-                    ],
-                    const SizedBox(height: 80),
                   ],
-                ),
-        ),
-        _AddBar(
-          ctrl: _addCtrl,
-          focusNode: _focusNode,
-          isActive: _adding,
-          bottomPad: bottomPad,
-          hint: 'Add a movie to watch together…',
-          onFocus: () => setState(() => _adding = true),
-          onSubmit: _submit,
+                ],
+              ),
+
+        // FAB — search
+        Positioned(
+          bottom: MediaQuery.of(context).padding.bottom + 20,
+          left: 20,
+          right: 20,
+          child: GestureDetector(
+            onTap: () => _showSearch(context, ref),
+            child: Container(
+              height: 52,
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.search_rounded, color: Colors.black, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'Search a movie',
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ],
+    );
+  }
+
+  void _showSearch(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _MovieSearchSheet(
+        onSelected: (result) => ref.read(moviesProvider.notifier).add(
+              MovieItem(
+                id: MovieRepository.newId(),
+                title: result.title,
+                isWatched: false,
+                createdAt: DateTime.now(),
+                posterPath: result.posterPath,
+                year: result.year,
+                tmdbId: result.tmdbId,
+              ),
+            ),
+      ),
     );
   }
 }
@@ -992,6 +1022,24 @@ class _MovieTileState extends State<_MovieTile> {
     setState(() => _editing = false);
     FocusScope.of(context).unfocus();
   }
+
+  Widget _movieFallback(bool watched) => Container(
+        width: 36,
+        height: 52,
+        decoration: BoxDecoration(
+          color: watched
+              ? Colors.white.withValues(alpha: 0.04)
+              : AppColors.primary.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(
+          Icons.movie_outlined,
+          size: 16,
+          color: watched
+              ? Colors.white.withValues(alpha: 0.2)
+              : AppColors.primary.withValues(alpha: 0.7),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -1053,25 +1101,21 @@ class _MovieTileState extends State<_MovieTile> {
                 ),
               ),
               const SizedBox(width: 12),
-              // Movie icon
-              Container(
-                width: 32, height: 32,
-                decoration: BoxDecoration(
-                  color: watched
-                      ? Colors.white.withValues(alpha: 0.04)
-                      : AppColors.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  Icons.movie_outlined,
-                  size: 16,
-                  color: watched
-                      ? Colors.white.withValues(alpha: 0.2)
-                      : AppColors.primary.withValues(alpha: 0.7),
-                ),
+              // Poster or fallback icon
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: widget.movie.posterUrl != null
+                    ? CachedNetworkImage(
+                        imageUrl: widget.movie.posterUrl!,
+                        width: 36,
+                        height: 52,
+                        fit: BoxFit.cover,
+                        errorWidget: (_, __, ___) => _movieFallback(watched),
+                      )
+                    : _movieFallback(watched),
               ),
               const SizedBox(width: 12),
-              // Title
+              // Title + year
               Expanded(
                 child: _editing
                     ? TextField(
@@ -1086,18 +1130,30 @@ class _MovieTileState extends State<_MovieTile> {
                           contentPadding: EdgeInsets.zero,
                         ),
                       )
-                    : Text(
-                        widget.movie.title,
-                        style: AppTextStyles.body.copyWith(
-                          color: watched
-                              ? Colors.white.withValues(alpha: 0.3)
-                              : Colors.white.withValues(alpha: 0.9),
-                          decoration: watched
-                              ? TextDecoration.lineThrough
-                              : null,
-                          decorationColor:
-                              Colors.white.withValues(alpha: 0.3),
-                        ),
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.movie.title,
+                            style: AppTextStyles.body.copyWith(
+                              color: watched
+                                  ? Colors.white.withValues(alpha: 0.3)
+                                  : Colors.white.withValues(alpha: 0.9),
+                              decoration: watched
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                              decorationColor:
+                                  Colors.white.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          if (widget.movie.year != null &&
+                              widget.movie.year!.isNotEmpty)
+                            Text(
+                              widget.movie.year!,
+                              style: AppTextStyles.muted
+                                  .copyWith(fontSize: 12),
+                            ),
+                        ],
                       ),
               ),
             ],
@@ -1106,6 +1162,189 @@ class _MovieTileState extends State<_MovieTile> {
       ),
     );
   }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MOVIE SEARCH SHEET  (TMDB via Cloud Function)
+// ══════════════════════════════════════════════════════════════════════════════
+
+class _MovieSearchSheet extends StatefulWidget {
+  const _MovieSearchSheet({required this.onSelected});
+
+  final ValueChanged<TmdbMovieResult> onSelected;
+
+  @override
+  State<_MovieSearchSheet> createState() => _MovieSearchSheetState();
+}
+
+class _MovieSearchSheetState extends State<_MovieSearchSheet> {
+  final _ctrl = TextEditingController();
+  List<TmdbMovieResult> _results = [];
+  bool _loading = false;
+  String _error = '';
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _search(String query) async {
+    if (query.trim().length < 2) return;
+    setState(() { _loading = true; _error = ''; });
+    try {
+      final res = await TmdbSearchService.search(query.trim());
+      setState(() => _results = res);
+    } catch (e) {
+      setState(() => _error = 'Search failed. Try again.');
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
+
+  void _pick(TmdbMovieResult r) {
+    widget.onSelected(r);
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    final navBottom = MediaQuery.of(context).padding.bottom;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFF0F0F0F),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(20, 16, 20, 20 + bottom + navBottom),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Handle
+          Center(
+            child: Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text('Search a movie', style: AppTextStyles.appTitle.copyWith(fontSize: 18)),
+          const SizedBox(height: 4),
+          Text('Powered by TMDB', style: AppTextStyles.muted.copyWith(fontSize: 11)),
+          const SizedBox(height: 16),
+
+          // Search field
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A1A1A),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
+            ),
+            child: TextField(
+              controller: _ctrl,
+              autofocus: true,
+              style: AppTextStyles.body,
+              cursorColor: AppColors.primary,
+              textInputAction: TextInputAction.search,
+              onSubmitted: _search,
+              decoration: InputDecoration(
+                hintText: 'Inception, Interstellar…',
+                hintStyle: AppTextStyles.muted,
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                suffixIcon: _loading
+                    ? const Padding(
+                        padding: EdgeInsets.all(13),
+                        child: SizedBox(
+                          width: 18, height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2, color: AppColors.primary),
+                        ),
+                      )
+                    : IconButton(
+                        icon: const Icon(Icons.search, color: AppColors.primary),
+                        onPressed: () => _search(_ctrl.text),
+                      ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          if (_error.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(_error,
+                  style: AppTextStyles.muted.copyWith(color: Colors.redAccent)),
+            ),
+
+          if (_results.isNotEmpty)
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.45,
+              ),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _results.length,
+                itemBuilder: (_, i) {
+                  final r = _results[i];
+                  return ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    leading: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: r.posterUrl != null
+                          ? CachedNetworkImage(
+                              imageUrl: r.posterUrl!,
+                              width: 40,
+                              height: 58,
+                              fit: BoxFit.cover,
+                              errorWidget: (_, __, ___) => _posterFallback(),
+                            )
+                          : _posterFallback(),
+                    ),
+                    title: Text(r.title,
+                        style: AppTextStyles.body
+                            .copyWith(color: Colors.white.withValues(alpha: 0.9))),
+                    subtitle: Row(
+                      children: [
+                        if (r.year.isNotEmpty)
+                          Text(r.year, style: AppTextStyles.muted.copyWith(fontSize: 12)),
+                        if (r.year.isNotEmpty && r.rating != null)
+                          Text('  ·  ', style: AppTextStyles.muted.copyWith(fontSize: 12)),
+                        if (r.rating != null) ...[
+                          const Icon(Icons.star_rounded,
+                              color: Color(0xFFFFCC00), size: 12),
+                          const SizedBox(width: 2),
+                          Text(r.rating!.toStringAsFixed(1),
+                              style: AppTextStyles.muted.copyWith(fontSize: 12)),
+                        ],
+                      ],
+                    ),
+                    onTap: () => _pick(r),
+                  );
+                },
+              ),
+            ),
+        ],
+        ),
+      ),
+    );
+  }
+
+  Widget _posterFallback() => Container(
+        width: 40, height: 58,
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(Icons.movie_outlined,
+            size: 18, color: AppColors.primary.withValues(alpha: 0.5)),
+      );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1250,6 +1489,426 @@ class _EmptyHint extends StatelessWidget {
                 textAlign: TextAlign.center),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// WISHES TAB  ("i'd love to")
+// ══════════════════════════════════════════════════════════════════════════════
+
+class _WishesTab extends ConsumerStatefulWidget {
+  const _WishesTab();
+
+  @override
+  ConsumerState<_WishesTab> createState() => _WishesTabState();
+}
+
+class _WishesTabState extends ConsumerState<_WishesTab> {
+  final _ctrl = TextEditingController();
+  final _focus = FocusNode();
+  bool _adding = false;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final text = _ctrl.text.trim();
+    if (text.isEmpty) return;
+    final repo = ref.read(wishRepositoryProvider);
+    if (repo == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Not connected to couple yet')));
+      return;
+    }
+    final uid  = AuthService.uid ?? '';
+    final name = ref.read(myNameProvider) ?? '';
+    try {
+      await repo.add(text, uid, name);
+      _ctrl.clear();
+      _focus.unfocus();
+      setState(() => _adding = false);
+      HapticFeedback.lightImpact();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  Future<void> _join(String wishId) async {
+    final repo = ref.read(wishRepositoryProvider);
+    if (repo == null) return;
+    final uid  = AuthService.uid ?? '';
+    final name = ref.read(myNameProvider) ?? '';
+    await repo.join(wishId, uid, name);
+    HapticFeedback.mediumImpact();
+  }
+
+  Future<void> _delete(String wishId) async {
+    final repo = ref.read(wishRepositoryProvider);
+    if (repo == null) return;
+    await repo.delete(wishId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final wishesAsync = ref.watch(wishesProvider);
+    final wishes      = ref.watch(pendingWishesProvider);
+    final myName      = ref.watch(myNameProvider) ?? '';
+    final bottomPad   = MediaQuery.of(context).viewInsets.bottom;
+
+    if (wishesAsync.hasError) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text('Firestore error:\n${wishesAsync.error}',
+              style: AppTextStyles.muted.copyWith(fontSize: 11, color: Colors.redAccent),
+              textAlign: TextAlign.center),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        Expanded(
+          child: wishes.isEmpty
+              ? _EmptyHint(
+                  icon: Icons.auto_awesome_rounded,
+                  message: 'write something you\'d love to do\nand invite them to join ♡',
+                  onAdd: () {
+                    setState(() => _adding = true);
+                    _focus.requestFocus();
+                  },
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+                  itemCount: wishes.length,
+                  itemBuilder: (_, i) {
+                    final w = wishes[i];
+                    final isMe = w.creatorName == myName;
+                    return _WishTile(
+                      wish: w,
+                      isMe: isMe,
+                      onJoin: isMe ? null : () => _join(w.id),
+                      onDelete: isMe ? () => _delete(w.id) : null,
+                    );
+                  },
+                ),
+        ),
+        // Add bar
+        _AddBar(
+          ctrl: _ctrl,
+          focusNode: _focus,
+          isActive: _adding,
+          bottomPad: bottomPad,
+          hint: 'i\'d love to...',
+          onFocus: () => setState(() => _adding = true),
+          onSubmit: _submit,
+        ),
+      ],
+    );
+  }
+}
+
+// ── Wish tile ─────────────────────────────────────────────────────────────────
+
+class _WishTile extends StatefulWidget {
+  const _WishTile({
+    required this.wish,
+    required this.isMe,
+    this.onJoin,
+    this.onDelete,
+  });
+
+  final Wish wish;
+  final bool isMe;
+  final VoidCallback? onJoin;
+  final VoidCallback? onDelete;
+
+  @override
+  State<_WishTile> createState() => _WishTileState();
+}
+
+class _WishTileState extends State<_WishTile>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+  late final Animation<double> _glow;
+  bool _joining = false;
+  bool _joined  = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _scale = TweenSequence([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.18), weight: 30),
+      TweenSequenceItem(tween: Tween(begin: 1.18, end: 0.95), weight: 40),
+      TweenSequenceItem(tween: Tween(begin: 0.95, end: 1.0),  weight: 30),
+    ]).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+    _glow = Tween(begin: 0.0, end: 1.0)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleJoin() async {
+    if (_joining) return;
+    setState(() => _joining = true);
+    await _ctrl.forward();
+    setState(() => _joined = true);
+
+    // Show creator's celebration GIF as overlay
+    final celebGif = widget.wish.creatorName == 'Berfin'
+        ? _berfinCelebGif
+        : _yigitaliCelebGif;
+    if (mounted) _showCelebration(context, celebGif, widget.wish.creatorName);
+
+    await Future.delayed(const Duration(milliseconds: 700));
+    widget.onJoin?.call();
+  }
+
+  void _showCelebration(BuildContext context, String gifPath, String name) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.75),
+      barrierDismissible: true,
+      builder: (_) => _CelebrationOverlay(gifPath: gifPath, name: name),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isMe = widget.isMe;
+    final wish = widget.wish;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 400),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: _joined
+            ? AppColors.primary.withValues(alpha: 0.12)
+            : const Color(0xFF111111),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _joined
+              ? AppColors.primary.withValues(alpha: 0.6)
+              : isMe
+                  ? AppColors.primary.withValues(alpha: 0.25)
+                  : Colors.white.withValues(alpha: 0.07),
+        ),
+        boxShadow: _joined
+            ? [BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.25),
+                blurRadius: 20,
+                spreadRadius: 2,
+              )]
+            : [],
+      ),
+      child: Row(
+        children: [
+          // Creator GIF
+          ClipOval(
+            child: Image.asset(
+              wish.creatorName == 'Berfin' ? _berfinGif : _yigitaliGif,
+              width: 38, height: 38,
+              fit: BoxFit.cover,
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Text
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(wish.text,
+                    style: AppTextStyles.bodyBold.copyWith(fontSize: 14)),
+                const SizedBox(height: 2),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  child: Text(
+                    _joined
+                        ? 'you\'re in — can\'t wait ♡'
+                        : isMe
+                            ? 'your wish ♡'
+                            : '${wish.creatorName} wants this',
+                    key: ValueKey(_joined),
+                    style: AppTextStyles.muted.copyWith(
+                      fontSize: 11,
+                      color: _joined
+                          ? AppColors.primary.withValues(alpha: 0.8)
+                          : null,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Join button
+          if (!isMe && widget.onJoin != null)
+            ScaleTransition(
+              scale: _scale,
+              child: GestureDetector(
+                onTap: _handleJoin,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: _joined ? AppColors.primary : AppColors.primary,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    child: _joined
+                        ? const Icon(Icons.favorite_rounded,
+                            key: ValueKey('heart'),
+                            color: Colors.black, size: 16)
+                        : _joining
+                            ? const SizedBox(
+                                key: ValueKey('loading'),
+                                width: 16, height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.black))
+                            : Text(
+                                'join me ♡',
+                                key: const ValueKey('text'),
+                                style: AppTextStyles.bodyBold.copyWith(
+                                    fontSize: 12, color: Colors.black),
+                              ),
+                  ),
+                ),
+              ),
+            )
+          else if (isMe && widget.onDelete != null)
+            GestureDetector(
+              onTap: widget.onDelete,
+              child: const Icon(Icons.close_rounded,
+                  color: Colors.white24, size: 18),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Celebration overlay ───────────────────────────────────────────────────────
+
+class _CelebrationOverlay extends StatefulWidget {
+  const _CelebrationOverlay({required this.gifPath, required this.name});
+  final String gifPath;
+  final String name;
+
+  @override
+  State<_CelebrationOverlay> createState() => _CelebrationOverlayState();
+}
+
+class _CelebrationOverlayState extends State<_CelebrationOverlay> {
+  @override
+  void initState() {
+    super.initState();
+    // Auto-dismiss after 2.8s
+    Future.delayed(const Duration(milliseconds: 2800), () {
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Image.asset(
+            widget.gifPath,
+            width: 280,
+            height: 280,
+            fit: BoxFit.contain,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '${widget.name} is so excited! ♡',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'you\'re doing this together',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.55),
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Shared wish tile (in Plans tab) ──────────────────────────────────────────
+
+class _SharedWishTile extends StatelessWidget {
+  const _SharedWishTile({required this.wish});
+  final Wish wish;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF111111),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+      ),
+      child: Row(
+        children: [
+          // Empty circle (uncompleted style)
+          Container(
+            width: 24, height: 24,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.25),
+                width: 1.5,
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(wish.text,
+                    style: AppTextStyles.bodyBold.copyWith(fontSize: 15)),
+                const SizedBox(height: 2),
+                Text(
+                  '${wish.creatorName} & ${wish.joinedName ?? '?'} ♡',
+                  style: AppTextStyles.muted.copyWith(fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

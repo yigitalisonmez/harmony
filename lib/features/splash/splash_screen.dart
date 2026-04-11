@@ -63,7 +63,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // Duration: 900ms per beat — lub(fast) dub(fast) pause
     _heartCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 1400),
     );
 
     // Scale: 1.0 → 1.14 → 0.97 → 1.1 → 1.0 → hold
@@ -118,7 +118,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       if (mounted) _heartCtrl.repeat();
     });
 
-    Future.delayed(const Duration(milliseconds: 3200), () {
+    Future.delayed(const Duration(milliseconds: 4500), () {
       if (mounted && !_navigated) {
         _navigated = true;
         context.go('/');

@@ -249,7 +249,7 @@ class _AppBar extends StatelessWidget {
               ),
               if (daysCount != null)
                 Text(
-                  '$daysCount days together ♡',
+                  '$daysCount days of us ♡',
                   style: AppTextStyles.muted.copyWith(
                     fontSize: 10,
                     color: AppColors.primary.withValues(alpha: 0.7),
@@ -491,7 +491,7 @@ class _RandomMemorySheetState extends State<_RandomMemorySheet> {
                 ),
               ),
             ),
-            const SizedBox(height: 36),
+            SizedBox(height: 24 + MediaQuery.of(context).padding.bottom),
           ],
         ),
       ),

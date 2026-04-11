@@ -217,7 +217,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   Widget _buildMemoryList(List<Memory> mems) {
     if (mems.isEmpty) {
       return Center(
-        child: Text('no memories on this day',
+        child: Text('this day slipped by quietly — go make tomorrow unforgettable ♡',
+            textAlign: TextAlign.center,
             style: AppTextStyles.muted),
       );
     }

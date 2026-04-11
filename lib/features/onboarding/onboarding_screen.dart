@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/services/auth_service.dart';
-import '../../data/repositories/couple_provider.dart';
 import '../../core/router/app_router.dart' show routerCoupleNotifier;
+import '../../data/repositories/couple_provider.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -26,43 +25,27 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     super.dispose();
   }
 
-  DateTime? _parseDate(String input) {
-    final s = input.trim();
-    if (s.length != 6) return null;
-    final day   = int.tryParse(s.substring(0, 2));
-    final month = int.tryParse(s.substring(2, 4));
-    final year  = int.tryParse('20${s.substring(4, 6)}');
-    if (day == null || month == null || year == null) return null;
-    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
-    return DateTime(year, month, day);
-  }
-
-  Future<void> _getStarted() async {
+  Future<void> _submit() async {
     FocusScope.of(context).unfocus();
     final input = _dateCtrl.text.trim();
-    final date  = _parseDate(input);
-    if (date == null) {
-      setState(() => _error = 'Enter your start date — e.g. 220925');
+    if (input.length != 6) {
+      setState(() => _error = 'Enter your start date — e.g. 210925');
       return;
     }
 
     setState(() { _loading = true; _error = null; });
     try {
-      // Ensure anonymous sign-in is complete
       if (AuthService.currentUser == null) {
         await AuthService.signInAnonymously();
       }
-
-      final coupleId = await AuthService.joinOrCreateCouple(
-        code: input,
-        startDate: date,
-      );
+      final coupleId = await AuthService.loginWithCode(input);
       ref.read(coupleIdProvider.notifier).state = coupleId;
-      routerCoupleNotifier.value = coupleId; // triggers router redirect → '/'
+      routerCoupleNotifier.value = coupleId;
     } catch (e) {
-      setState(() => _error = 'Error: $e');
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      String msg = 'Something went wrong. Try again.';
+      if (e.toString().contains('wrong_code')) msg = 'Wrong date — try again.';
+      if (e.toString().contains('couple_not_found')) msg = 'Couple not found.';
+      setState(() { _error = msg; _loading = false; });
     }
   }
 
@@ -80,10 +63,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Heart logo
+              // Logo
               Container(
-                width: 48,
-                height: 48,
+                width: 48, height: 48,
                 decoration: BoxDecoration(
                   color: AppColors.primary,
                   borderRadius: BorderRadius.circular(14),
@@ -106,7 +88,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
               const SizedBox(height: 56),
 
-              Text('When did you two start?',
+              Text('When did it all begin?',
                   style: AppTextStyles.bodyBold.copyWith(fontSize: 16)),
               const SizedBox(height: 6),
               Text(
@@ -117,21 +99,20 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
               const SizedBox(height: 20),
 
-              // Date input
               TextField(
                 controller: _dateCtrl,
                 keyboardType: TextInputType.number,
                 maxLength: 6,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                style: AppTextStyles.bodyBold.copyWith(
-                    fontSize: 28, letterSpacing: 8),
+                style: AppTextStyles.bodyBold
+                    .copyWith(fontSize: 28, letterSpacing: 8),
                 textAlign: TextAlign.center,
                 decoration: InputDecoration(
                   counterText: '',
-                  hintText: 'your start date',
+                  hintText: 'DDMMYY',
                   hintStyle: AppTextStyles.body.copyWith(
                     fontSize: 16,
-                    letterSpacing: 1,
+                    letterSpacing: 2,
                     color: Colors.white24,
                   ),
                   filled: true,
@@ -147,11 +128,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   ),
                   contentPadding: const EdgeInsets.symmetric(
                       horizontal: 20, vertical: 20),
-                  suffixText: 'DDMMYY',
-                  suffixStyle:
-                      AppTextStyles.muted.copyWith(fontSize: 10),
                 ),
-                onSubmitted: (_) => _getStarted(),
+                onSubmitted: (_) => _submit(),
               ),
 
               if (_error != null) ...[
@@ -163,9 +141,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
               const SizedBox(height: 32),
 
-              // CTA button
               GestureDetector(
-                onTap: _loading ? null : _getStarted,
+                onTap: _loading ? null : _submit,
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 18),
@@ -179,7 +156,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                             width: 20, height: 20,
                             child: CircularProgressIndicator(
                                 color: Colors.white, strokeWidth: 2))
-                        : Text('Get started',
+                        : Text('Continue',
                             style: AppTextStyles.bodyBold.copyWith(
                                 color: Colors.white, fontSize: 16)),
                   ),

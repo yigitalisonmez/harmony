@@ -80,8 +80,8 @@ class _MemoryCardStackState extends State<MemoryCardStack> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(24, 16, 24, 24 + MediaQuery.of(ctx).padding.bottom),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -822,7 +822,7 @@ class _ReactionSheetState extends State<_ReactionSheet> {
                 ),
               ),
             ),
-            const SizedBox(height: 36),
+            SizedBox(height: 24 + MediaQuery.of(context).padding.bottom),
           ],
         ),
       ),

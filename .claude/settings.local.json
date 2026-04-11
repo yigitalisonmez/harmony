@@ -19,7 +19,12 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(python -c \"import json; d=json.load\\(open\\(''C:/WorkSpace/Flutter/harmony/android/app/google-services.json''\\)\\); [print\\(c.get\\(''client_info'',{}\\).get\\(''android_client_info'',{}\\).get\\(''package_name'',''''\\)\\) for c in d.get\\(''client'',[]\\)]\")",
-      "Bash(dart analyze:*)"
+      "Bash(dart analyze:*)",
+      "Bash(del /F \"C:\\\\WorkSpace\\\\Flutter\\\\harmony\\\\.git\\\\index.lock\")",
+      "Bash(powershell -Command \"Remove-Item -Force 'C:\\\\WorkSpace\\\\Flutter\\\\harmony\\\\.git\\\\index.lock'\")",
+      "Bash(npx tsc:*)",
+      "Bash(flutter build:*)",
+      "Bash(flutter run:*)"
     ]
   }
 }

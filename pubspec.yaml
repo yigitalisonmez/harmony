@@ -67,6 +67,10 @@ flutter:
     - assets/images/
     - assets/svg/
     - assets/logo/
+    - assets/Young_slim_Mediterranean_female_with_long_wavy_dar_breathing-idle_south-east.gif
+    - assets/Young_brunette_male_with_curly_black_hair_short_be_breathing-idle_west.gif
+    - assets/Young_slim_Mediterranean_female_with_long_wavy_dar_custom-She throws her arms up in joy _south-east.gif
+    - assets/Young_brunette_male_with_curly_black_hair_short_be_custom-He lifts his arms in the air, _south-east.gif
 
 flutter_launcher_icons:
   android: true

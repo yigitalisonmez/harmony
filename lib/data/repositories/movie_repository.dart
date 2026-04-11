@@ -6,12 +6,18 @@ class MovieItem {
   final String title;
   final bool isWatched;
   final DateTime createdAt;
+  final String? posterPath;
+  final String? year;
+  final int? tmdbId;
 
   const MovieItem({
     required this.id,
     required this.title,
     required this.isWatched,
     required this.createdAt,
+    this.posterPath,
+    this.year,
+    this.tmdbId,
   });
 
   MovieItem copyWith({String? title, bool? isWatched}) => MovieItem(
@@ -19,13 +25,23 @@ class MovieItem {
         title: title ?? this.title,
         isWatched: isWatched ?? this.isWatched,
         createdAt: createdAt,
+        posterPath: posterPath,
+        year: year,
+        tmdbId: tmdbId,
       );
+
+  String? get posterUrl => posterPath != null
+      ? 'https://image.tmdb.org/t/p/w200$posterPath'
+      : null;
 
   Map<String, dynamic> toMap() => {
         'id': id,
         'title': title,
         'isWatched': isWatched,
         'createdAt': createdAt.millisecondsSinceEpoch,
+        'posterPath': posterPath,
+        'year': year,
+        'tmdbId': tmdbId,
       };
 
   static MovieItem fromMap(Map map) => MovieItem(
@@ -34,6 +50,9 @@ class MovieItem {
         isWatched: map['isWatched'] as bool,
         createdAt:
             DateTime.fromMillisecondsSinceEpoch(map['createdAt'] as int),
+        posterPath: map['posterPath'] as String?,
+        year: map['year'] as String?,
+        tmdbId: map['tmdbId'] as int?,
       );
 }
 

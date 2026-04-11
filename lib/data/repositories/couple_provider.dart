@@ -16,3 +16,6 @@ final isReadyProvider = Provider<bool>((ref) {
   final coupleId = ref.watch(coupleIdProvider);
   return user.valueOrNull != null && coupleId != null;
 });
+
+/// The local display name for the current user (set after identity selection).
+final myNameProvider = StateProvider<String?>((ref) => null);

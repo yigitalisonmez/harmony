@@ -5,9 +5,10 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'core/router/app_router.dart'
-    show appRouter, routerCoupleNotifier, routerBootstrapNotifier;
+    show appRouter, routerCoupleNotifier, routerBootstrapNotifier, routerIdentityNotifier;
 import 'core/theme/app_theme.dart';
 import 'core/services/auth_service.dart';
+import 'core/services/identity_service.dart';
 import 'core/services/notification_service.dart';
 import 'data/repositories/couple_provider.dart';
 import 'data/repositories/settings_repository.dart';
@@ -36,6 +37,7 @@ void main() async {
   await BucketListRepository.init();
   await PlacesRepository.init();
   await MovieRepository.init();
+  await IdentityService.init();
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
@@ -68,11 +70,22 @@ class _HarmonyAppState extends ConsumerState<HarmonyApp> {
       await AuthService.signInAnonymously();
     }
 
-    // Load coupleId if already paired
-    final coupleId = await AuthService.getCoupleId();
-    if (mounted && coupleId != null) {
-      ref.read(coupleIdProvider.notifier).state = coupleId;
-      routerCoupleNotifier.value = coupleId;
+    // Always connect to the one and only couple (code never changes)
+    try {
+      final coupleId = await AuthService.loginWithCode(AuthService.coupleAccessCode);
+      if (mounted) {
+        ref.read(coupleIdProvider.notifier).state = coupleId;
+        routerCoupleNotifier.value = coupleId;
+      }
+    } catch (_) {
+      // Couple not found in Firestore — user will pair through identity screen
+    }
+
+    // Load local identity (name chosen on this device)
+    final localName = IdentityService.myName;
+    if (localName != null && localName.isNotEmpty) {
+      if (mounted) ref.read(myNameProvider.notifier).state = localName;
+      routerIdentityNotifier.value = true;
     }
 
     // Bootstrap done — router can now make redirect decisions
