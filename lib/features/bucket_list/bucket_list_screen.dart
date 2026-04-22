@@ -20,6 +20,7 @@ import '../../data/repositories/wish_provider.dart';
 
 const _berfinGif         = 'assets/Young_slim_Mediterranean_female_with_long_wavy_dar_breathing-idle_south-east.gif';
 const _yigitaliGif       = 'assets/Young_brunette_male_with_curly_black_hair_short_be_breathing-idle_west.gif';
+const _yigitaliSeGif     = 'assets/Young_brunette_male_with_curly_black_hair_short_be_breathing-idle_south-east.gif';
 const _berfinCelebGif    = 'assets/Young_slim_Mediterranean_female_with_long_wavy_dar_custom-She throws her arms up in joy _south-east.gif';
 const _yigitaliCelebGif  = 'assets/Young_brunette_male_with_curly_black_hair_short_be_custom-He lifts his arms in the air, _south-east.gif';
 
@@ -1698,110 +1699,115 @@ class _WishTileState extends State<_WishTile>
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 400),
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: _joined
-            ? AppColors.primary.withValues(alpha: 0.12)
+            ? AppColors.primary.withValues(alpha: 0.08)
             : const Color(0xFF111111),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: _joined
-              ? AppColors.primary.withValues(alpha: 0.6)
-              : isMe
-                  ? AppColors.primary.withValues(alpha: 0.25)
-                  : Colors.white.withValues(alpha: 0.07),
+              ? AppColors.primary.withValues(alpha: 0.5)
+              : Colors.white.withValues(alpha: 0.07),
         ),
         boxShadow: _joined
             ? [BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.25),
-                blurRadius: 20,
-                spreadRadius: 2,
+                color: AppColors.primary.withValues(alpha: 0.2),
+                blurRadius: 16,
               )]
             : [],
       ),
-      child: Row(
-        children: [
-          // Creator GIF
-          ClipOval(
-            child: Image.asset(
-              wish.creatorName == 'Berfin' ? _berfinGif : _yigitaliGif,
-              width: 38, height: 38,
-              fit: BoxFit.cover,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            // Creator GIF
+            ClipOval(
+              child: Image.asset(
+                wish.creatorName == 'Berfin' ? _berfinGif : _yigitaliSeGif,
+                width: 44, height: 44,
+                fit: BoxFit.cover,
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          // Text
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(wish.text,
-                    style: AppTextStyles.bodyBold.copyWith(fontSize: 14)),
-                const SizedBox(height: 2),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
-                  child: Text(
-                    _joined
-                        ? 'you\'re in — can\'t wait ♡'
-                        : isMe
-                            ? 'your wish ♡'
-                            : '${wish.creatorName} wants this',
-                    key: ValueKey(_joined),
-                    style: AppTextStyles.muted.copyWith(
-                      fontSize: 11,
-                      color: _joined
-                          ? AppColors.primary.withValues(alpha: 0.8)
-                          : null,
+            const SizedBox(width: 12),
+            // Text
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(wish.text,
+                      style: AppTextStyles.bodyBold.copyWith(fontSize: 15)),
+                  const SizedBox(height: 2),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    child: Text(
+                      _joined
+                          ? 'you\'re in — can\'t wait ♡'
+                          : isMe
+                              ? 'your wish ♡'
+                              : '${wish.creatorName} wants this',
+                      key: ValueKey(_joined),
+                      style: AppTextStyles.muted.copyWith(
+                        fontSize: 11,
+                        color: _joined
+                            ? AppColors.primary.withValues(alpha: 0.8)
+                            : null,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Action
+            if (!isMe && widget.onJoin != null)
+              ScaleTransition(
+                scale: _scale,
+                child: GestureDetector(
+                  onTap: _handleJoin,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 250),
+                      child: _joined
+                          ? const Icon(Icons.favorite_rounded,
+                              key: ValueKey('heart'),
+                              color: Colors.black, size: 16)
+                          : _joining
+                              ? const SizedBox(
+                                  key: ValueKey('loading'),
+                                  width: 16, height: 16,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.black))
+                              : Text(
+                                  'join me ♡',
+                                  key: const ValueKey('text'),
+                                  style: AppTextStyles.bodyBold.copyWith(
+                                      fontSize: 12, color: Colors.black),
+                                ),
                     ),
                   ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          // Join button
-          if (!isMe && widget.onJoin != null)
-            ScaleTransition(
-              scale: _scale,
-              child: GestureDetector(
-                onTap: _handleJoin,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              )
+            else if (isMe && widget.onDelete != null)
+              GestureDetector(
+                onTap: widget.onDelete,
+                child: Container(
+                  width: 32, height: 32,
                   decoration: BoxDecoration(
-                    color: _joined ? AppColors.primary : AppColors.primary,
-                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.white.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(9),
                   ),
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 250),
-                    child: _joined
-                        ? const Icon(Icons.favorite_rounded,
-                            key: ValueKey('heart'),
-                            color: Colors.black, size: 16)
-                        : _joining
-                            ? const SizedBox(
-                                key: ValueKey('loading'),
-                                width: 16, height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.black))
-                            : Text(
-                                'join me ♡',
-                                key: const ValueKey('text'),
-                                style: AppTextStyles.bodyBold.copyWith(
-                                    fontSize: 12, color: Colors.black),
-                              ),
-                  ),
+                  child: const Icon(Icons.close_rounded,
+                      color: Colors.white38, size: 16),
                 ),
               ),
-            )
-          else if (isMe && widget.onDelete != null)
-            GestureDetector(
-              onTap: widget.onDelete,
-              child: const Icon(Icons.close_rounded,
-                  color: Colors.white24, size: 18),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
